@@ -123,7 +123,7 @@ function adviceList(advice: ReturnType<typeof prescribe>): string {
   <span class="saving">${index + 1}</span>
   <span>
     <span class="rule-title">${escapeHtml(item.advice)}</span>
-    <span class="rule-meta">${numbers.format(item.claims)} claims, ${numbers.format(item.saving)} token-turns</span>
+    <span class="rule-meta">${numbers.format(item.claims)} claims, ${numbers.format(item.saving)} token-turns${item.basis === 'always-on' ? ', always-on context not counted as waste' : ''}</span>
     <span class="rule-eg">e.g. ${escapeHtml(short(item.example, 90))}</span>
   </span>
   <span class="saving">${numbers.format(item.saving)}</span>

@@ -30,8 +30,9 @@ function renderSession(session: SessionSummary): string {
   if (advice.length > 0) {
     lines.push('what to change');
     for (const [index, item] of advice.entries()) {
+      const basis = item.basis === 'always-on' ? ' · always-on, not counted as waste' : '';
       lines.push(
-        `  ${index + 1}. ${numbers.format(item.saving)} token-turns · ${item.claims} claim(s)`,
+        `  ${index + 1}. ${numbers.format(item.saving)} token-turns · ${item.claims} claim(s)${basis}`,
       );
       lines.push(truncate(`     ${item.advice}`, WIDTH));
       lines.push(truncate(`     e.g. ${item.example}`, WIDTH));

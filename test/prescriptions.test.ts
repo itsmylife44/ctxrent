@@ -39,3 +39,15 @@ test('the terminal report shows what to change and why', async () => {
   assert.match(result.stdout, /2,400 token-turns/);
   assert.match(result.stdout, /Read files with the Read tool/);
 });
+
+test('an always-on attachment is labelled apart from waste', async () => {
+  const result = await run(['audit', 'test/fixtures/claude-code/always-on', '--json'], nodeDeps);
+  const session = JSON.parse(result.stdout).sessions[0];
+  const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
+
+  assert.equal(advice[0]?.id, 'attachment-bloat');
+  assert.equal(advice[0]?.basis, 'always-on');
+
+  const text = await run(['audit', 'test/fixtures/claude-code/always-on'], nodeDeps);
+  assert.match(text.stdout, /always-on, not counted as waste/);
+});

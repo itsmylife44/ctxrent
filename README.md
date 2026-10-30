@@ -99,6 +99,8 @@ A claim always names the carrier and the turns that justify it. A class that can
 
 Every report ends with the two or three changes that would have saved the most. Each carries an amount and a line you can paste into `AGENTS.md`, because you cannot stop an agent from running `cat` — you can only steer it.
 
+A change that comes from always-on context — an attachment re-injected every turn — is labelled as such, because it is not waste: nothing stopped being useful, the content simply never stops being sent. That is also why such a session can score 100/100 while its largest cost is still worth fixing: the score measures waste, the recommendation measures rent.
+
 ## Teach the agent
 
 `ctxrent teach` aggregates every session into rules with evidence and keeps only the ones that recur. A rule that appeared once is an afternoon, not a habit.

@@ -6,6 +6,8 @@ export type Prescription = {
   claims: number;
   advice: string;
   example: string;
+  /** `waste` is rent that stopped being useful; `always-on` is context that never stops. */
+  basis: 'waste' | 'always-on';
 };
 
 export type PrescriptionInput = {
@@ -91,6 +93,7 @@ function fromCarriers(input: PrescriptionInput): Prescription[] {
       id: 'attachment-bloat',
       saving: carrier.rent,
       claims: 1,
+      basis: 'always-on',
       advice:
         'Move fixed context into a file the agent reads on demand, not an always-on attachment.',
       example: `attachment, ${carrier.size.toLocaleString('en-US')} tokens across ${carrier.injections.toLocaleString('en-US')} injections`,
@@ -119,6 +122,7 @@ export function prescribe(input: PrescriptionInput, limit = 3): Prescription[] {
       claims: 1,
       advice: rule.advice,
       example: claim.carrier,
+      basis: 'waste',
     });
   }
 
