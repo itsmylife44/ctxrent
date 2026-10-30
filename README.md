@@ -124,7 +124,25 @@ A pattern that comes from always-on context — an attachment re-injected every 
     observed: files read through Bash (cat, sed, head, tail, awk, nl) instead of the Read tool
 ```
 
-With `--agent`, ctxrent hands that evidence to your own agent, which writes the rules:
+### The flow, with your agent
+
+The skill teaches your agent the protocol; the CLI is called by the agent, never the other way round.
+
+```bash
+ctxrent skill > ~/.claude/skills/ctxrent/SKILL.md   # install once
+```
+
+Then, inside a session, you ask for it and the agent does the work:
+
+1. `ctxrent findings --json` — the evidence, with ids, labels, numbers and the commands that caused them
+2. the agent writes `.ctxrent/rules.md`, one line per finding: `- <rule> <!-- id: <finding id> -->`
+3. `ctxrent review --rules .ctxrent/rules.md` — the page opens, you tick what stays, you press Apply
+
+The agent writes with the whole session in front of it, which is why this is the flow that produces the best rules. Nothing is written until you approve, and `ctxrent` drops any line whose id it does not recognise.
+
+### Or let ctxrent call the agent
+
+With `--agent`, ctxrent hands the same evidence to a fresh agent process, which writes the rules:
 
 ```bash
 ctxrent teach --agent claude --language en --write ~/.claude/CLAUDE.md
@@ -254,7 +272,7 @@ src/run.ts      the command surface
 
 ```bash
 npm install          # dev dependencies only: typescript, @types/node
-npm test             # 114 tests, runs the TypeScript source, Node 22.18+
+npm test             # 115 tests, runs the TypeScript source, Node 22.18+
 npm run typecheck
 ```
 

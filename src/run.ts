@@ -10,6 +10,7 @@ import { renderDiff } from './report/diff.ts';
 import { parseTaskSet, templateTaskSet } from './taskset.ts';
 import { diffTaskSet } from './diff.ts';
 import { findPatterns } from './prescriptions.ts';
+import { SKILL_TEXT } from './skill.ts';
 import {
   composeBlock,
   mergeBlock,
@@ -18,7 +19,7 @@ import {
   teach,
 } from './teach.ts';
 import type { WriterRunner } from './writer.ts';
-import { buildBrief, writeRules } from './writer.ts';
+import { buildBrief, parseWrittenRules, writeRules } from './writer.ts';
 import type { TeachPlan } from './report/teach.ts';
 import { renderTeach } from './report/teach.ts';
 import { renderApplied, renderReview } from './report/review.ts';
@@ -96,9 +97,14 @@ Usage
       --yes                      skip the question, for scripted use
       --min-sessions <n>         evidence threshold, default 3
   ctxrent review [path]          findings, the written rules, and a page to approve them
-      --agent <claude|codex>     writer, default claude
+      --rules <file>             rules written by your agent, one line per finding
+      --agent <claude|codex>     or let ctxrent call the agent, default claude
       --language <code>          language the rules are written in, default en
       --write <file>             target shown in the page
+  ctxrent findings [path]        the evidence alone, for your agent to write rules from
+      --json                     machine-readable findings
+      --since <date>             only sessions modified since then
+  ctxrent skill                  print the skill that teaches an agent this protocol
   ctxrent init [file]            write a task-set template (default ctxrent.json)
   ctxrent diff <task-set> --a <dir> --b <dir>
                                  run both variants and compare rent and success
@@ -119,6 +125,8 @@ async function dispatch(argv: string[], deps: Deps): Promise<Result> {
   if (command === 'audit') return runAudit(rest, deps);
   if (command === 'check') return runCheck(rest, deps);
   if (command === 'teach') return runTeach(rest, deps);
+  if (command === 'findings') return runFindings(rest, deps);
+  if (command === 'skill') return { exitCode: 0, stdout: SKILL_TEXT, stderr: '' };
   if (command === 'review') return runReview(rest, deps);
   if (command === 'init') return runInit(rest, deps);
   if (command === 'diff') return runDiff(rest, deps);
@@ -339,6 +347,87 @@ async function loadSessions(
   return { ok: true, model: summariseSessions(sessions) };
 }
 
+async function runFindings(args: string[], deps: Deps): Promise<Result> {
+  const parsed = parseFindingsArgs(args);
+  if (!parsed.ok) return failure(parsed.error);
+
+  const { target, minSessions, json, since } = parsed.options;
+  const files = target === undefined ? await allFiles(deps) : await walkSessions(target, deps);
+  if (files.length === 0) return failure('ctxrent: no sessions found');
+
+  const kept = await filterSince(files, deps, since);
+  if (kept.length === 0) return failure('ctxrent: no sessions found');
+
+  const { sessions, records } = await parseFiles(kept, deps);
+  if (records === 0) return failure('ctxrent: no readable sessions');
+
+  const model = summariseSessions(sessions);
+  const findings = teach(sessions, { minSessions });
+
+  if (json) {
+    return {
+      exitCode: 0,
+      stdout: `${JSON.stringify({ sessions: sessions.length, turns: model.totals.turns, findings }, null, 2)}\n`,
+      stderr: '',
+    };
+  }
+
+  return { exitCode: 0, stdout: renderFindings(findings, sessions.length, model.totals.turns), stderr: '' };
+}
+
+function renderFindings(findings: ReturnType<typeof teach>, sessions: number, turns: number): string {
+  const lines = [`${sessions} sessions · ${turns} turns · ${findings.length} findings`, ''];
+  if (findings.length === 0) {
+    lines.push('no pattern recurs in enough sessions to be worth writing down');
+    return `${lines.join('\n')}\n`;
+  }
+  for (const item of findings) {
+    lines.push(`${item.id}  ·  ${item.lever}`);
+    lines.push(`  observed: ${item.label}`);
+    lines.push(`  evidence: ${item.claims} claims in ${item.sessions} sessions, ${item.saving} token-turns`);
+    lines.push(`  example:  ${item.example}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+function parseFindingsArgs(
+  args: string[],
+):
+  | { ok: true; options: { target: string | undefined; minSessions: number; json: boolean; since: number | null } }
+  | { ok: false; error: string } {
+  const options = {
+    target: undefined as string | undefined,
+    minSessions: 3,
+    json: false,
+    since: null as number | null,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] as string;
+    if (argument === '--json') { options.json = true; continue; }
+    if (argument === '--min-sessions') {
+      const value = args[index + 1];
+      const parsed = Number(value);
+      if (value === undefined || !Number.isInteger(parsed) || parsed < 1) {
+        return { ok: false, error: 'ctxrent: --min-sessions must be a positive integer' };
+      }
+      options.minSessions = parsed; index += 1; continue;
+    }
+    if (argument === '--since') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --since needs a date' };
+      const parsed = Date.parse(value);
+      if (Number.isNaN(parsed)) return { ok: false, error: `ctxrent: --since "${value}" is not a date` };
+      options.since = parsed; index += 1; continue;
+    }
+    if (argument.startsWith('-')) return { ok: false, error: `ctxrent: unknown option "${argument}"` };
+    if (options.target !== undefined) return { ok: false, error: `ctxrent: unexpected argument "${argument}"` };
+    options.target = argument;
+  }
+
+  return { ok: true, options };
+}
+
 async function runTeach(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseTeachArgs(args);
   if (!parsed.ok) return failure(parsed.error);
@@ -434,6 +523,7 @@ async function openReview(
   minSessions: number,
   runner: WriterRunner,
   language: string,
+  rulesFile: string | null = null,
 ): Promise<Result> {
   if (files.length === 0) return failure('ctxrent: no sessions found');
 
@@ -452,8 +542,33 @@ async function openReview(
     };
   }
 
-  const written = await writeRules(deps, runner, writable, sessions.length, language, process.cwd());
-  if (!written.ok) return failure(`ctxrent: ${written.error}`);
+  let rules: { id: string | null; advice: string }[];
+
+  if (rulesFile !== null) {
+    let text: string;
+    try {
+      text = await deps.readText(rulesFile);
+    } catch {
+      return failure(`ctxrent: cannot read ${rulesFile}`);
+    }
+    rules = parseWrittenRules(text, new Set(writable.map((item) => item.id)));
+    if (rules.length === 0) {
+      return failure(
+        `ctxrent: no usable rule in ${rulesFile}; each line must read "- <rule> <!-- id: <finding id> -->"`,
+      );
+    }
+  } else {
+    const written = await writeRules(
+      deps,
+      runner,
+      writable,
+      sessions.length,
+      language,
+      process.cwd(),
+    );
+    if (!written.ok) return failure(`ctxrent: ${written.error}`);
+    rules = written.rules;
+  }
 
   let before: string | null = null;
   try {
@@ -471,7 +586,7 @@ async function openReview(
         model,
         target: destination,
         existingRules: readManagedRules(before),
-        rules: written.rules,
+        rules,
         configuration: teachings.filter((item) => item.lever === 'configuration'),
       }),
     onApply: async (ids, keep, requestedTarget) => {
@@ -482,7 +597,7 @@ async function openReview(
         current = null;
       }
 
-      const selected = written.rules.filter((item) => item.id !== null && ids.includes(item.id));
+      const selected = rules.filter((item) => item.id !== null && ids.includes(item.id));
       const existing = readManagedRules(current).filter((rule) => keep.includes(rule.advice));
       const block = composeBlock(mergeRules(existing, selected), sessions.length);
 
@@ -514,12 +629,12 @@ async function runReview(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseReviewArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { target, file, minSessions, agent, language } = parsed.options;
+  const { target, file, minSessions, agent, language, rules } = parsed.options;
 
   const files = target === undefined ? await allFiles(deps) : await walkSessions(target, deps);
   const destination = file ?? (await deps.defaultInstructionFile());
 
-  return openReview(files, deps, destination, minSessions, agent, language);
+  return openReview(files, deps, destination, minSessions, agent, language, rules);
 }
 
 function parseReviewArgs(
@@ -533,6 +648,7 @@ function parseReviewArgs(
         minSessions: number;
         agent: WriterRunner;
         language: string;
+        rules: string | null;
       };
     }
   | { ok: false; error: string } {
@@ -542,6 +658,7 @@ function parseReviewArgs(
     minSessions: 3,
     agent: 'claude' as WriterRunner,
     language: DEFAULT_LANGUAGE,
+    rules: null as string | null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -551,6 +668,13 @@ function parseReviewArgs(
       const value = args[index + 1];
       if (value === undefined) return { ok: false, error: 'ctxrent: --write needs a file path' };
       options.file = value;
+      index += 1;
+      continue;
+    }
+    if (argument === '--rules') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --rules needs a file path' };
+      options.rules = value;
       index += 1;
       continue;
     }

@@ -174,3 +174,62 @@ test('the page carries a real form, tokens and no javascript', async () => {
   assert.match(page, /:root\{/);
   assert.match(page, /overflow-x:clip/);
 });
+
+test('review --rules takes the rules the agent wrote, not from a spawned agent', async () => {
+  let agentCalls = 0;
+  const harness = reviewDeps(async (url) => {
+    const form = new URLSearchParams();
+    form.append('rule', 'read-via-read-tool');
+    form.append('target', 'OUT.md');
+    await fetch(`${url}/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+  });
+
+  const deps = {
+    ...harness.deps,
+    async execFile() {
+      agentCalls += 1;
+      return { code: 0, stdout: '', stderr: '' };
+    },
+    async readText(path: string) {
+      if (path === 'rules.md') {
+        return '- Leggi i file con Read, mai con cat. <!-- id: read-via-read-tool -->\n- Inventata. <!-- id: sconosciuto -->\n';
+      }
+      return harness.deps.readText(path);
+    },
+  };
+
+  const result = await run(
+    ['review', 'test/fixtures/claude-code', '--min-sessions', '1', '--rules', 'rules.md', '--write', 'OUT.md'],
+    deps,
+  );
+
+  const written = harness.stored.get('OUT.md') ?? '';
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(agentCalls, 0);
+  assert.match(written, /Leggi i file con Read, mai con cat\./);
+  assert.doesNotMatch(written, /Inventata/);
+});
+
+test('review --rules refuses a file with no usable rule', async () => {
+  const harness = reviewDeps(async () => {});
+  const deps = {
+    ...harness.deps,
+    async readText(path: string) {
+      if (path === 'rules.md') return 'just some prose\n';
+      return harness.deps.readText(path);
+    },
+  };
+
+  const result = await run(
+    ['review', 'test/fixtures/claude-code', '--min-sessions', '1', '--rules', 'rules.md'],
+    deps,
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /no usable rule/);
+});
