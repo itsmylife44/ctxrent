@@ -4,7 +4,7 @@ description: Context rent of the user's coding-agent sessions, turned into appro
 license: MIT
 compatibility: Node 20 or newer. Reads Claude Code and Codex session records under the user's home directory. Runs the ctxrent CLI from PATH, or from its GitHub release through npx when it is not installed.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
   category: developer-tools
 allowed-tools: Bash(ctxrent *) Bash(npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/* ctxrent *)
 ---
@@ -24,7 +24,7 @@ If the user asked for something narrower (a gate, a shareable report, a comparis
 If `ctxrent --help` succeeds, the command is `ctxrent`. Otherwise it is:
 
 ```bash
-npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz ctxrent
+npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.1/ctxrent-0.1.1.tgz ctxrent
 ```
 
 That runs the released CLI without installing anything. Below, `ctxrent` means whichever one works.

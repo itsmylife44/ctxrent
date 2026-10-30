@@ -1,6 +1,6 @@
 {
   "name": "ctxrent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Measure the context rent of coding-agent sessions and compare variants fairly",
   "license": "MIT",
@@ -32,7 +32,7 @@
     "prepublishOnly": "npm test && npm run typecheck",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "version": "node scripts/version.js && git add skills/ctxrent/SKILL.md"
+    "version": "node scripts/version.js && git add skills/ctxrent/SKILL.md README.md"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
