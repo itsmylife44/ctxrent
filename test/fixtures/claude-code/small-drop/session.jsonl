@@ -1,0 +1,3 @@
+{"type":"user","sessionId":"fixture-small-drop","uuid":"u1","message":{"role":"user","content":[{"type":"text","text":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}]}}
+{"type":"assistant","sessionId":"fixture-small-drop","uuid":"a1","message":{"id":"msg_1","role":"assistant","content":[],"usage":{"input_tokens":1,"cache_read_input_tokens":999,"cache_creation_input_tokens":0,"output_tokens":1}}}
+{"type":"assistant","sessionId":"fixture-small-drop","uuid":"a2","message":{"id":"msg_2","role":"assistant","content":[],"usage":{"input_tokens":1,"cache_read_input_tokens":998,"cache_creation_input_tokens":0,"output_tokens":1}}}

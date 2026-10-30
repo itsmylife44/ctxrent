@@ -1,0 +1,19 @@
+session fixture-waste
+7 turns · 28,070 tokens spent · 23% of context accounted for
+
+rent 5,850 token-turns   score 56/100
+
+top carriers
+  Grep x                              2,400 rent     600 tok        t4–4
+  Bash ls                             2,100 rent     800 tok     t5–6 ×2
+  user                                  700 rent     100 tok        t1–1
+  Read src/x.ts                         600 rent     100 tok        t2–2
+  Edit src/x.ts                          50 rent      10 tok        t3–3
+
+waste 2,600 token-turns (44% of rent)
+  superseded-read          500   1 claim(s)
+    Read src/x.ts — read at turn 2, rewritten at turn 2
+  dead-payload           1,800   1 claim(s)
+    Grep x — carrier never used again, 3 turns of rent left to pay
+  retry-loop               300   1 claim(s)
+    Bash ls — same carrier injected again within 2 turns

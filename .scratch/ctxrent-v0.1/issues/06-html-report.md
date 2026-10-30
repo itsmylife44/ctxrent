@@ -4,9 +4,17 @@
 
 **Blocked by:** 05.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The produced file contains no external script, style, font or image reference
-- [ ] Opening it offline renders score, split and top offenders
-- [ ] The document states the session identifier and the coverage figure
-- [ ] The structure is covered by a golden test
+- [x] The produced file contains no external script, style, font or image reference
+- [x] Opening it offline renders score, split and top offenders
+- [x] The document states the session identifier and the coverage figure
+- [x] The structure is covered by a golden test
+
+## Comments
+
+Implemented in `src/report/html.ts` as one self-contained document: inline CSS, no script, no external font, image or link. A test asserts the absence of `http(s)://`, `<script` and `<link`.
+
+- Carrier names are HTML-escaped; a test feeds a carrier containing a script tag and asserts it is neutralised.
+- The hero states rent, score, waste and turns. Aggregate reports cap the table at the 100 highest-rent sessions and say so.
+- Real data: the whole archive renders to 26 KB.

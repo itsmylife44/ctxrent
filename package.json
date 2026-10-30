@@ -1,9 +1,24 @@
 {
   "name": "ctxrent",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
-  "description": "Measure the context rent of coding-agent sessions",
+  "description": "Measure the context rent of coding-agent sessions and compare variants fairly",
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "agents",
+    "context",
+    "tokens",
+    "profiler",
+    "claude-code",
+    "codex",
+    "observability"
+  ],
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
     "ctxrent": "./src/cli.ts"
   },

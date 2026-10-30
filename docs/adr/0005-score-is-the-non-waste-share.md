@@ -1,0 +1,3 @@
+# The score is the share of rent that is not waste
+
+The hero number is `rentScore = 100 x (1 - wasteRent / rent)`. An earlier candidate was efficiency, `100 x (injected / rent)`, which measures how late content entered the context. That number collapses towards zero for any long session, so a 232-turn session scores 1 and a 7-turn session scores 77 regardless of behaviour — it ranks session length, not habits. The non-waste share is a ratio, so it is comparable across sessions, and it points at something the user can change. Rent in absolute token-turns is reported beside it so magnitude is never hidden.
