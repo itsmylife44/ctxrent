@@ -67,8 +67,14 @@ export function teach(sessions: SessionSummary[], options: TeachOptions): Teachi
     .sort((a, b) => b.saving - a.saving);
 }
 
-export function instructionBlock(teachings: Teaching[], sessionCount: number): string {
-  const rules = teachings.filter((item) => item.lever === 'instruction');
+export function instructionBlock(
+  teachings: Teaching[],
+  sessionCount: number,
+  selected?: string[],
+): string {
+  const rules = teachings.filter(
+    (item) => item.lever === 'instruction' && (selected === undefined || selected.includes(item.id)),
+  );
   const lines = [
     '<!-- ctxrent:begin -->',
     '## Context hygiene',

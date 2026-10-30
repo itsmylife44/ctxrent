@@ -26,6 +26,10 @@ export type Deps = {
   /** True when a human is present to answer a question. */
   interactive: boolean;
   confirm(question: string): Promise<boolean>;
+  defaultInstructionFile(): Promise<string>;
+  openUrl(url: string): Promise<void>;
+  /** Writes immediately, for progress that must appear before a long wait. */
+  notify(message: string): void;
 };
 
 export const nodeDeps: Deps = {
@@ -88,6 +92,21 @@ export const nodeDeps: Deps = {
     }
   },
   interactive: process.stdin.isTTY === true,
+  async defaultInstructionFile() {
+    return join(homedir(), '.claude', 'CLAUDE.md');
+  },
+  notify(message) {
+    process.stdout.write(message);
+  },
+  async openUrl(url) {
+    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
+    await new Promise<void>((resolve) => {
+      const child = spawn(opener, [url], { stdio: 'ignore', detached: true });
+      child.on('error', () => resolve());
+      child.unref();
+      resolve();
+    });
+  },
   async confirm(question) {
     const reader = createInterface({ input: process.stdin, output: process.stdout });
     try {

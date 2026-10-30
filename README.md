@@ -19,6 +19,7 @@ npx ctxrent audit ~/.claude/projects --all
 npx ctxrent check --max-waste 40               # gate: 0 ok, 1 over, 2 cannot measure
 npx ctxrent teach                              # what to write down, from every session
 npx ctxrent teach --write ~/.claude/CLAUDE.md  # preview, then ask before writing
+npx ctxrent review                             # tick rules in the browser, apply there
 ```
 
 Supported records: Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`). The adapter is detected from the file itself.
@@ -74,6 +75,8 @@ Every claim names the carrier and the turns that justify it. Rules that cannot b
 
 It writes a **managed block**, delimited by `<!-- ctxrent:begin -->`, so re-running it replaces its own rules and leaves your text alone.
 
+`ctxrent review` does the same thing in the browser: it opens a page served only on loopback, shows each rule with its evidence and the command that caused it, and lets you untick what you do not want. The page is a plain form, so it works with scripting off, and the target file is editable there. Applying from the page is the only thing that writes.
+
 Nothing is ever written without consent. `teach` is a dry run by default; with `--write` it prints the target, what will change, the full block, how the change will be verified and how to undo it, and then asks. Without a terminal to answer — a script, CI, a pipe — it refuses and exits non-zero unless `--yes` is passed. That flag is the explicit statement that you chose this.
 
 The output separates two levers, because conflating them produces advice that cannot work:
@@ -114,7 +117,7 @@ The verifier's exit code is the only judge of success. Each run happens in a fre
 ## Development
 
 ```bash
-node --test test/*.test.ts      # 88 tests, no network, no real agents
+node --test test/*.test.ts      # 92 tests, loopback only, no real agents
 npx tsc --noEmit                # typecheck
 ```
 

@@ -1,5 +1,6 @@
 import type { AuditModel, SessionSummary, WasteKind } from '../model.ts';
 import { prescribe } from '../prescriptions.ts';
+import { escapeHtml, page, short } from './theme.ts';
 
 const numbers = new Intl.NumberFormat('en-US');
 const WASTE_ORDER: WasteKind[] = [
@@ -12,205 +13,224 @@ const AGGREGATE_LIMIT = 100;
 
 export function renderHtml(model: AuditModel): string {
   const single = model.sessions.length === 1 ? model.sessions[0] : undefined;
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ctxrent — ${escape(single?.sessionId ?? `${model.sessions.length} sessions`)}</title>
-<style>
-:root{--bg:#0b0d10;--fg:#e8eaed;--muted:#8b929c;--line:#22262c;--accent:#7ee0a1;--waste:#f2795a}
-*{box-sizing:border-box}
-body{margin:0;padding:32px;background:var(--bg);color:var(--fg);font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-h1{font-size:16px;font-weight:600;margin:0 0 4px}
-h2{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:28px 0 10px}
-.sub{color:var(--muted);margin:0 0 24px}
-.hero{display:flex;gap:36px;align-items:baseline;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:20px 0}
-.hero div{display:flex;flex-direction:column}
-.hero b{font-size:30px;font-weight:600}
-.hero span{color:var(--muted);font-size:12px}
-.row{display:grid;grid-template-columns:minmax(120px,1fr) 3fr 90px;gap:12px;align-items:center;margin:6px 0}
-.row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--accent)}
-.row.waste .bar i{background:var(--waste)}
-.val{text-align:right;color:var(--muted);font-size:12px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
-th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-td.num{text-align:right}
-footer{margin-top:32px;color:var(--muted);font-size:12px}
-</style>
-</head>
-<body>
-<h1>ctxrent</h1>
-<p class="sub">${escape(subtitle(model))}</p>
-${single ? hero(single) : aggregate(model)}
-<footer>Context rent is measured in token-turns: one token occupying the context for one request.</footer>
-</body>
-</html>
-`;
+  const title = single === undefined ? `${model.sessions.length} sessions` : single.sessionId;
+
+  return page({
+    title: `ctxrent report: ${escapeHtml(title)}`,
+    description:
+      'Context rent: what a coding agent keeps paying for the content it holds in context, and what to change.',
+    body: single === undefined ? aggregateBody(model) : sessionBody(single),
+  });
 }
 
-function subtitle(model: AuditModel): string {
-  if (model.sessions.length === 1) {
-    const session = model.sessions[0] as SessionSummary;
-    const coverage =
-      session.coverage === null
-        ? 'coverage unavailable'
-        : `${Math.round(100 * session.coverage)}% of context accounted for`;
-    return `${session.sessionId} · ${session.turns.length} turns · ${coverage}`;
-  }
-  return `${model.sessions.length} sessions · ${numbers.format(model.totals.turns)} turns`;
-}
+function sessionBody(session: SessionSummary): string {
+  const advice = prescribe({
+    claims: session.waste,
+    carriers: session.carriers,
+    rent: session.rent,
+  });
+  const top = session.carriers[0];
 
-function hero(session: SessionSummary): string {
-  return `<section class="hero">
-  <div><b>${value(session.rent)}</b><span>token-turns of rent</span></div>
-  <div><b>${session.rentScore ?? '–'}</b><span>score out of 100</span></div>
-  <div><b>${value(session.wasteRent)}</b><span>token-turns of waste</span></div>
-  <div><b>${session.turns.length}</b><span>turns</span></div>
+  return `<h1>ctxrent</h1>
+
+<section class="hero">
+  <div>
+    <p class="hero-number">${value(session.rent)}</p>
+    <p class="hero-label">token-turns of rent over ${session.turns.length} turns</p>
+  </div>
+  <div class="hero-side">
+    <p class="score">${session.rentScore ?? '–'}<span class="hero-label"> score out of 100</span></p>
+    <p class="hero-label">${value(session.wasteRent)} token-turns of waste</p>
+  </div>
 </section>
-${whatToChange(session)}
-${waste(session)}
-${carriers(session)}
-${skills(session)}`;
+
+<p>${problemSentence(top, session.rent, session.wasteRent)}</p>
+
+${advice.length === 0 ? '' : section('What to change', adviceList(advice))}
+
+${section('Where the rent goes', bars(session.carriers, session.rent))}
+
+${section('Waste', wasteList(session))}
+
+${skillsSection(session)}
+
+<footer>
+<p>Context rent is measured in token-turns: one token held in context for one request. Token-turns are a volume, not a sum of money.</p>
+<p>${coverageLine(session)}</p>
+</footer>`;
 }
 
-function value(input: number | null): string {
-  return input === null ? '—' : numbers.format(input);
-}
-
-function carriers(session: SessionSummary): string {
-  if (session.carriers.length === 0) return block('Top carriers', '<p class="sub">none measurable</p>');
-  const max = session.carriers[0]?.rent ?? 1;
-  const rows = session.carriers
-    .slice(0, 10)
-    .map(
-      (carrier) => `<div class="row">
-      <span class="name">${escape(carrier.carrier)}</span>
-      <span class="bar"><i style="width:${Math.max(2, Math.round((100 * carrier.rent) / max))}%"></i></span>
-      <span class="val">${numbers.format(carrier.rent)} rent · t${carrier.firstTurn}–${carrier.lastTurn}</span>
-    </div>`,
-    )
-    .join('\n');
-  return block('Top carriers', rows);
-}
-
-function waste(session: SessionSummary): string {
-  if (session.wasteRent === null) {
-    return block('Waste', '<p class="sub">unavailable: the record does not say enough to classify</p>');
-  }
-  if (session.waste.length === 0) return block('Waste', '<p class="sub">none found</p>');
-
-  const max = session.waste[0]?.rent ?? 1;
-  const rows = WASTE_ORDER.flatMap((kind) =>
-    session.waste
-      .filter((claim) => claim.kind === kind)
-      .slice(0, 2)
-      .map(
-        (claim) => `<div class="row waste">
-      <span class="name">${escape(short(claim.carrier))}</span>
-      <span class="bar"><i style="width:${Math.max(2, Math.round((100 * claim.rent) / max))}%"></i></span>
-      <span class="val">${numbers.format(claim.rent)} waste</span>
-    </div>
-    <p class="sub">${escape(claim.kind)} — ${escape(claim.reason)}</p>`,
-      ),
-  );
-  return block('Waste', rows.join('\n'));
-}
-
-function whatToChange(session: SessionSummary): string {
-  const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
-  if (advice.length === 0) return '';
-
-  const rows = advice
-    .map(
-      (item, index) => `<div class="row">
-      <span class="name">${index + 1}. ${escape(item.advice)}</span>
-      <span class="bar"><i style="width:${Math.max(2, Math.round((100 * item.saving) / (advice[0]?.saving ?? 1)))}%"></i></span>
-      <span class="val">${numbers.format(item.saving)} token-turns</span>
-    </div>`,
-    )
-    .join('\n');
-
-  return block('What to change', rows);
-}
-
-function skills(session: SessionSummary): string {
-  if (session.skills === null) {
-    return block(
-      'Skills and MCP tools',
-      '<p class="sub">unavailable: the record has no attribution fields</p>',
-    );
-  }
-  if (session.skills.length === 0) return '';
-  const max = session.skills[0]?.rent ?? 1;
-  const rows = session.skills
-    .map(
-      (skill) => `<div class="row">
-      <span class="name">${escape(skill.name)} (${escape(skill.kind)})</span>
-      <span class="bar"><i style="width:${Math.max(2, Math.round((100 * skill.rent) / max))}%"></i></span>
-      <span class="val">${numbers.format(skill.rent)} rent</span>
-    </div>`,
-    )
-    .join('\n');
-  return block('Skills and MCP tools', rows);
-}
-
-function aggregate(model: AuditModel): string {
+function aggregateBody(model: AuditModel): string {
   const ranked = [...model.sessions].sort((a, b) => (b.rent ?? -1) - (a.rent ?? -1));
   const shown = ranked.slice(0, AGGREGATE_LIMIT);
 
   const rows = shown
     .map(
       (session) => `<tr>
-      <td>${escape(session.sessionId)}</td>
-      <td class="num">${session.turns.length}</td>
-      <td class="num">${session.tokens === null ? '—' : numbers.format(session.tokens.total)}</td>
-      <td class="num">${value(session.rent)}</td>
-      <td class="num">${session.rentScore ?? '—'}</td>
-      <td class="num">${value(session.wasteRent)}</td>
-    </tr>`,
+  <td>${escapeHtml(short(session.sessionId, 44))}</td>
+  <td class="num">${session.turns.length}</td>
+  <td class="num">${session.tokens === null ? '–' : numbers.format(session.tokens.total)}</td>
+  <td class="num">${value(session.rent)}</td>
+  <td class="num">${session.rentScore ?? '–'}</td>
+  <td class="num">${value(session.wasteRent)}</td>
+</tr>`,
     )
     .join('\n');
 
   const more =
     ranked.length > shown.length
-      ? `<p class="sub">showing the ${AGGREGATE_LIMIT} highest-rent sessions of ${numbers.format(ranked.length)}</p>`
+      ? `<p class="note">Showing the ${shown.length} highest-rent sessions of ${numbers.format(ranked.length)}.</p>`
       : '';
 
-  return `<section class="hero">
-  <div><b>${value(model.totals.rent)}</b><span>token-turns of rent</span></div>
-  <div><b>${model.totals.rentScore ?? '–'}</b><span>score out of 100</span></div>
-  <div><b>${value(model.totals.wasteRent)}</b><span>token-turns of waste</span></div>
-  <div><b>${model.sessions.length}</b><span>sessions profiled</span></div>
+  return `<h1>ctxrent</h1>
+
+<section class="hero">
+  <div>
+    <p class="hero-number">${value(model.totals.rent)}</p>
+    <p class="hero-label">token-turns of rent over ${numbers.format(model.totals.turns)} turns</p>
+  </div>
+  <div class="hero-side">
+    <p class="score">${model.totals.rentScore ?? '–'}<span class="hero-label"> score out of 100</span></p>
+    <p class="hero-label">${value(model.totals.wasteRent)} token-turns of waste</p>
+    <p class="hero-label">${numbers.format(model.sessions.length)} sessions profiled</p>
+  </div>
 </section>
-${block(
+
+${section(
   'Sessions',
   `<table>
-  <thead><tr><th>session</th><th>turns</th><th>tokens</th><th>rent</th><th>score</th><th>waste</th></tr></thead>
+  <thead><tr><th>Session</th><th>Turns</th><th>Tokens</th><th>Rent</th><th>Score</th><th>Waste</th></tr></thead>
   <tbody>${rows}</tbody>
 </table>
-${more}
-<p class="sub">coverage: ${model.totals.measuredSessions} sessions with usage, ${model.totals.unmeasuredSessions} without, ${model.totals.sessionsWithRent} with rent, ${numbers.format(model.totals.unknownInjections)} unmeasurable injections</p>`,
-)}`;
+${more}`,
+)}
+
+<footer>
+<p>Context rent is measured in token-turns: one token held in context for one request. Token-turns are a volume, not a sum of money.</p>
+<p>Coverage: ${model.totals.measuredSessions} sessions with usage, ${model.totals.unmeasuredSessions} without, ${model.totals.sessionsWithRent} with rent, ${numbers.format(model.totals.unknownInjections)} unmeasurable injections.</p>
+</footer>`;
 }
 
-function short(text: string, limit = 72): string {
-  return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
-}
-
-function block(title: string, body: string): string {
-  return `<h2>${escape(title)}</h2>
+function section(title: string, body: string): string {
+  return `<h2>${escapeHtml(title)}</h2>
 ${body}`;
 }
 
-function escape(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+function adviceList(advice: ReturnType<typeof prescribe>): string {
+  const rows = advice
+    .map(
+      (item, index) => `<div class="rule">
+  <span class="saving">${index + 1}</span>
+  <span>
+    <span class="rule-title">${escapeHtml(item.advice)}</span>
+    <span class="rule-meta">${numbers.format(item.claims)} claims, ${numbers.format(item.saving)} token-turns</span>
+    <span class="rule-eg">e.g. ${escapeHtml(short(item.example, 90))}</span>
+  </span>
+  <span class="saving">${numbers.format(item.saving)}</span>
+</div>`,
+    )
+    .join('\n');
+  return `<div class="rules">${rows}</div>`;
+}
+
+function bars(carriers: SessionSummary['carriers'], rent: number | null): string {
+  if (carriers.length === 0) return '<p class="note">Nothing measurable.</p>';
+  const max = carriers[0]?.rent ?? 1;
+
+  return `<div class="bars">
+${carriers
+  .slice(0, 8)
+  .map(
+    (carrier) => `<div class="bar">
+  <span class="bar-name">${escapeHtml(short(carrier.carrier, 64))}</span>
+  <span class="bar-track"><span class="bar-fill${carrier.kind === 'attachment' ? ' waste' : ''}" style="width:${Math.max(2, Math.round((100 * carrier.rent) / max))}%"></span></span>
+  <span class="bar-value">${rent === null || rent === 0 ? '–' : `${Math.round((100 * carrier.rent) / rent)}%`}</span>
+</div>`,
+  )
+  .join('\n')}
+</div>`;
+}
+
+function wasteList(session: SessionSummary): string {
+  if (session.wasteRent === null) {
+    return '<p class="note">Unavailable: the record does not say enough to classify.</p>';
+  }
+  if (session.waste.length === 0) return '<p class="note">None found.</p>';
+
+  const rows = WASTE_ORDER.flatMap((kind) =>
+    session.waste
+      .filter((claim) => claim.kind === kind)
+      .slice(0, 3)
+      .map(
+        (claim) => `<div class="rule">
+  <span class="saving">${numbers.format(claim.rent)}</span>
+  <span>
+    <span class="rule-title">${escapeHtml(claim.kind)}</span>
+    <span class="rule-meta">${escapeHtml(short(claim.carrier, 80))}</span>
+    <span class="rule-eg">${escapeHtml(claim.reason)}</span>
+  </span>
+  <span></span>
+</div>`,
+      ),
+  );
+
+  return `<div class="rules">${rows.join('\n')}</div>`;
+}
+
+function skillsSection(session: SessionSummary): string {
+  if (session.skills === null) {
+    return section(
+      'Skills and MCP tools',
+      '<p class="note">Unavailable: the record has no attribution fields.</p>',
+    );
+  }
+  if (session.skills.length === 0) return '';
+
+  const rows = session.skills
+    .slice(0, 6)
+    .map(
+      (skill) => `<div class="rule">
+  <span class="saving"></span>
+  <span>
+    <span class="rule-title">${escapeHtml(skill.name)}</span>
+    <span class="rule-meta">${escapeHtml(skill.kind)}</span>
+  </span>
+  <span class="saving">${numbers.format(skill.rent)}</span>
+</div>`,
+    )
+    .join('\n');
+
+  return section('Skills and MCP tools', `<div class="rules">${rows}</div>`);
+}
+
+function problemSentence(
+  top: { carrier: string; rent: number } | undefined,
+  rent: number | null,
+  waste: number | null,
+): string {
+  if (top === undefined || rent === null || rent === 0) return 'No measurable rent to report.';
+  const share = Math.round((100 * top.rent) / rent);
+  const wasteText =
+    waste === null
+      ? 'Waste could not be measured.'
+      : `Waste is ${numbers.format(waste)} token-turns.`;
+  return `The largest cost is ${escapeHtml(short(top.carrier, 60))}, at ${share}% of the rent. ${wasteText}`;
+}
+
+function coverageLine(session: SessionSummary): string {
+  const parts = [
+    `${session.turns.length} turns`,
+    session.tokens === null
+      ? 'tokens unavailable'
+      : `${numbers.format(session.tokens.total)} tokens spent`,
+  ];
+  if (session.coverage !== null) {
+    parts.push(`${Math.round(100 * session.coverage)}% of context accounted for`);
+  }
+  if (session.unknownInjections > 0) parts.push(`${session.unknownInjections} unmeasurable`);
+  return `${parts.join('. ')}.`;
+}
+
+function value(input: number | null): string {
+  return input === null ? '–' : numbers.format(input);
 }
