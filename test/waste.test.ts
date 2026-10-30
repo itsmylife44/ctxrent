@@ -73,3 +73,12 @@ test('waste that cannot be decided is unavailable, not empty', async () => {
   assert.equal(parsed.wasteRent, null);
   assert.deepEqual(parsed.waste, []);
 });
+
+test('the same attachment injected again in one epoch is duplicate context', async () => {
+  const parsed = await session('test/fixtures/claude-code/duplicate-attachment');
+  const claims = parsed.waste.filter((c: { kind: string }) => c.kind === 'duplicate-context');
+
+  assert.equal(claims.length, 2);
+  assert.equal(parsed.wasteRent, 1800);
+  assert.equal(parsed.rentScore, 70);
+});

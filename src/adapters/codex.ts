@@ -60,6 +60,7 @@ export function parseCodexSession(text: string, fallbackId: string): ParseResult
             kind: injectionKind,
             carrier: injectionKind === 'system' ? 'developer-context' : 'user',
             path: null,
+            contentHash: null,
             ...estimate(charsOf(candidate['text'])),
           });
         }
@@ -81,6 +82,7 @@ export function parseCodexSession(text: string, fallbackId: string): ParseResult
           kind: 'tool-result',
           carrier,
           path: null,
+          contentHash: null,
           ...estimate(charsOf(payload['output'])),
         });
         continue;

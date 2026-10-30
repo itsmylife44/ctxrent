@@ -65,7 +65,7 @@ export function assembleSession(parts: SessionParts): SessionSummary {
 
   // Waste is only assessable when the record names something a rule can judge: a file read, or a
   // tool result whose carrier identifies the call. Otherwise "no waste found" would be a lie.
-  const assessable = turns.some((turn) =>
+  const assessable = waste.length > 0 || turns.some((turn) =>
     turn.injections.some(
       (injection) =>
         injection.kind === 'file-read' ||

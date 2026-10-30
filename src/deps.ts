@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 export type PathKind = 'file' | 'directory' | 'missing';
@@ -20,6 +20,8 @@ export type Deps = {
   copyDir(from: string, to: string): Promise<void>;
   makeTempDir(prefix: string): Promise<string>;
   removeDir(path: string): Promise<void>;
+  defaultRoots(): Promise<string[]>;
+  modifiedAt(path: string): Promise<number>;
 };
 
 export const nodeDeps: Deps = {
@@ -70,5 +72,15 @@ export const nodeDeps: Deps = {
   },
   async removeDir(path) {
     await rm(path, { recursive: true, force: true });
+  },
+  async defaultRoots() {
+    return [join(homedir(), '.claude', 'projects'), join(homedir(), '.codex', 'sessions')];
+  },
+  async modifiedAt(path) {
+    try {
+      return (await stat(path)).mtimeMs;
+    } catch {
+      return 0;
+    }
   },
 };

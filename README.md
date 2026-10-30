@@ -11,10 +11,12 @@ A file read at turn 2 of a 200-turn session is re-sent to the model on turn 3, 4
 ## Usage
 
 ```bash
+npx ctxrent                                    # the session you just finished
 npx ctxrent audit ~/.claude/projects/-Users-you-code-my-app
 npx ctxrent audit <session.jsonl> --json
 npx ctxrent audit <session.jsonl> --html report.html
 npx ctxrent audit ~/.claude/projects --all
+npx ctxrent check --max-waste 40               # gate: 0 ok, 1 over, 2 cannot measure
 ```
 
 Supported records: Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`). The adapter is detected from the file itself.
@@ -33,6 +35,21 @@ waste 8,977,870 token-turns (45% of rent)
   retry-loop         8,515,980   427 claim(s)
 ```
 
+## What to change
+
+Every report ends with the two or three changes that would have saved the most, each with an amount and a line you can paste into `AGENTS.md`:
+
+```
+what to change
+  1. 1,125,365 token-turns · 34 claim(s)
+     Move fixed context into a file the agent reads on demand, not an always-on…
+     e.g. attachment · 38,546 tokens × 34
+  2. 180,209 token-turns · 4 claim(s)
+     Cap what a command prints: pipe it through head, or write it to a file and…
+```
+
+Advice is written as an instruction because you cannot stop an agent from running `cat` — you can only steer it. Then measure the effect with `ctxrent diff`.
+
 ## What counts as waste
 
 | Class | Rule | What it catches |
@@ -40,6 +57,7 @@ waste 8,977,870 token-turns (45% of rent)
 | `superseded-read` | A file read, then rewritten later in the session | Reading a file you were about to edit |
 | `dead-payload` | A tool result over 500 tokens from a carrier never used again, with at least 2 turns left | Build logs and dumps that sit in context forever |
 | `retry-loop` | The same carrier injected again within 2 turns | Failed calls and correction cycles |
+| `duplicate-context` | The same attachment text injected again in one context epoch | Context that is already there, paid twice |
 
 Every claim names the carrier and the turns that justify it. Rules that cannot be decided from the record are reported as unavailable, never as zero.
 
@@ -64,6 +82,7 @@ The verifier's exit code is the only judge of success. Each run happens in a fre
 
 ## Honesty about the numbers
 
+- **Token-turns are a volume unit, not a money unit.** A re-read token is billed at 0.1× the base input rate and a cache write at 1.25×–2× (Anthropic and OpenAI prompt-caching docs), so rent tells you what dominates the prompt, not what the prompt cost. `ctxrent` deliberately reports no currency.
 - Injection sizes are **estimated** at `ceil(chars / 4)` from the recovered text. The model labels them `estimated`, and content whose text cannot be recovered is `unknown`, not zero.
 - The record stores deltas: the system prompt, the tool schemas and the cached prefix are never written to disk. Their rent is reported as `residualContextTokens`, never silently attributed. Coverage is measured inside the last context epoch, so the report always states the share it can explain.
 - When the context is compacted, content the record shows as dropped stops paying rent. Without that rule a long session reports more rent than it spent in tokens. A drop of at least 500 tokens and 5% counts as a compaction; smaller dips are treated as noise.
@@ -73,7 +92,7 @@ The verifier's exit code is the only judge of success. Each run happens in a fre
 ## Development
 
 ```bash
-node --test test/*.test.ts      # 63 tests, no network, no real agents
+node --test test/*.test.ts      # 76 tests, no network, no real agents
 npx tsc --noEmit                # typecheck
 ```
 

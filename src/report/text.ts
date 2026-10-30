@@ -1,10 +1,16 @@
 import type { AuditModel, SessionSummary, WasteKind } from '../model.ts';
+import { prescribe } from '../prescriptions.ts';
 
 const WIDTH = 80;
 const LIST_LIMIT = 20;
 const numbers = new Intl.NumberFormat('en-US');
 
-const WASTE_ORDER: WasteKind[] = ['superseded-read', 'dead-payload', 'retry-loop'];
+const WASTE_ORDER: WasteKind[] = [
+  'duplicate-context',
+  'superseded-read',
+  'dead-payload',
+  'retry-loop',
+];
 
 export function renderText(model: AuditModel): string {
   const single = model.sessions.length === 1 ? model.sessions[0] : undefined;
@@ -44,6 +50,19 @@ function renderSession(session: SessionSummary): string {
   }
   if (session.wasteRent === null) lines.push('  unavailable: the record does not say enough to classify');
   else if (session.waste.length === 0) lines.push('  none');
+
+  const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
+  if (advice.length > 0) {
+    lines.push('');
+    lines.push('what to change');
+    for (const [index, item] of advice.entries()) {
+      lines.push(
+        `  ${index + 1}. ${numbers.format(item.saving)} token-turns · ${item.claims} claim(s)`,
+      );
+      lines.push(truncate(`     ${item.advice}`, WIDTH));
+      lines.push(truncate(`     e.g. ${item.example}`, WIDTH));
+    }
+  }
 
   if (session.skills !== null && session.skills.length > 0) {
     lines.push('');

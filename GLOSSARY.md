@@ -32,6 +32,10 @@ _Avoid_: unused output, junk
 Repeated calls caused by failure or misalignment, where each attempt pays rent on the previous one.
 _Avoid_: error, rework, loop
 
+**Duplicate context**:
+Content injected again although verbatim copies are already in the context.
+_Avoid_: repeated attachment, re-injection
+
 **Skill bloat**:
 Rent attributable to a skill or MCP tool that did not contribute to the outcome.
 _Avoid_: skill cost, tool overhead

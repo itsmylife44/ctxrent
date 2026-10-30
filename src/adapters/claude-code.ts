@@ -2,7 +2,7 @@ import type { Injection, InjectionKind, TokenTotals, Turn } from '../model.ts';
 import { addTokens } from '../model.ts';
 import type { ParseResult } from '../assemble.ts';
 import { assembleSession } from '../assemble.ts';
-import { asBlocks, carrierOf, charsOf, estimate } from './content.ts';
+import { asBlocks, carrierOf, charsOf, estimate, hashOf, textOf } from './content.ts';
 
 const READ_TOOL = 'Read';
 
@@ -130,6 +130,7 @@ export function parseClaudeCodeSession(text: string, fallbackId: string): ParseR
             kind,
             carrier: carrierOf(tool?.name ?? 'unknown-tool', tool?.input ?? null),
             path: injectionPath,
+            contentHash: null,
             ...estimate(charsOf(candidate.content)),
           });
           continue;
@@ -140,6 +141,7 @@ export function parseClaudeCodeSession(text: string, fallbackId: string): ParseR
             kind: 'user-message',
             carrier: 'user',
             path: null,
+            contentHash: null,
             ...estimate(charsOf(candidate.text)),
           });
         }
@@ -148,8 +150,14 @@ export function parseClaudeCodeSession(text: string, fallbackId: string): ParseR
     }
 
     if (record.type === 'attachment') {
-      const chars = charsOf(record.rendered) ?? charsOf(record.attachment);
-      pending.push({ kind: 'attachment', carrier: 'attachment', path: null, ...estimate(chars) });
+      const text = textOf(record.rendered) ?? textOf(record.attachment);
+      pending.push({
+        kind: 'attachment',
+        carrier: 'attachment',
+        path: null,
+        contentHash: hashOf(text),
+        ...estimate(text === null ? null : text.length),
+      });
       continue;
     }
 
@@ -158,6 +166,7 @@ export function parseClaudeCodeSession(text: string, fallbackId: string): ParseR
         kind: 'system',
         carrier: 'system',
         path: null,
+        contentHash: null,
         ...estimate(charsOf(record.content)),
       });
     }

@@ -21,6 +21,7 @@ export type Injection = {
   kind: InjectionKind;
   carrier: string;
   path: string | null;
+  contentHash: string | null;
   size: number | null;
   sizeMethod: 'estimated' | 'unknown';
 };
@@ -61,7 +62,11 @@ export type SkillRent = {
   rent: number;
 };
 
-export type WasteKind = 'superseded-read' | 'dead-payload' | 'retry-loop';
+export type WasteKind =
+  | 'superseded-read'
+  | 'dead-payload'
+  | 'retry-loop'
+  | 'duplicate-context';
 
 export type WasteClaim = {
   kind: WasteKind;

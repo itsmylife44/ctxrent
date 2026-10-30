@@ -4,6 +4,7 @@ import { epochEnds } from './epochs.ts';
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const DEAD_PAYLOAD_MIN_SIZE = 500;
 const DEAD_PAYLOAD_MIN_AGE = 2;
+const DUPLICATE_MIN_SIZE = 200;
 const RETRY_WINDOW = 2;
 const RETRYABLE: Set<Injection['kind']> = new Set(['tool-result', 'file-read']);
 
@@ -40,6 +41,33 @@ export function classifyWaste(turns: Turn[]): WasteClaim[] {
       rent: wasted,
       turns: [turn, writeTurn],
       reason: `read at turn ${turn}, rewritten at turn ${writeTurn}`,
+    });
+    claimed.add(injection);
+  }
+
+  // Content injected verbatim a second time in the same epoch is pure duplication: it is already
+  // in the context, so the copy charges rent for nothing.
+  const seenInEpoch = new Set<string>();
+  for (const { injection, turn, epochEnd } of entries) {
+    if (injection.kind !== 'attachment') continue;
+    if (injection.contentHash === null || injection.size === null) continue;
+    if (injection.size < DUPLICATE_MIN_SIZE) continue;
+
+    const key = `${epochEnd}:${injection.contentHash}`;
+    if (!seenInEpoch.has(key)) {
+      seenInEpoch.add(key);
+      continue;
+    }
+
+    const wasted = wastedAfter(injection, epochEnd, turn);
+    if (wasted <= 0) continue;
+
+    claims.push({
+      kind: 'duplicate-context',
+      carrier: injection.carrier,
+      rent: wasted,
+      turns: [turn],
+      reason: 'identical attachment already present in the context',
     });
     claimed.add(injection);
   }

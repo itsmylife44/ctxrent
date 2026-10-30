@@ -1,21 +1,22 @@
+import { createHash } from 'node:crypto';
 import type { Injection } from '../model.ts';
 
 export const CHARS_PER_TOKEN = 4;
 
 type Block = Record<string, unknown>;
 
-/** Recovers the number of characters in a piece of recorded content, or null when there is no text to recover. */
-export function charsOf(value: unknown): number | null {
-  if (typeof value === 'string') return value.length;
+/** Recovers the text of a piece of recorded content, or null when there is no text to recover. */
+export function textOf(value: unknown): string | null {
+  if (typeof value === 'string') return value;
 
   if (Array.isArray(value)) {
-    let total = 0;
+    let text = '';
     for (const item of value) {
-      const chars = charsOf(item);
-      if (chars === null) return null;
-      total += chars;
+      const piece = textOf(item);
+      if (piece === null) return null;
+      text += piece;
     }
-    return total;
+    return text;
   }
 
   if (value !== null && typeof value === 'object') {
@@ -25,12 +26,23 @@ export function charsOf(value: unknown): number | null {
       const field = object[key];
       if (typeof field !== 'string') continue;
       sawText = true;
-      if (field.length > 0) return field.length;
+      if (field.length > 0) return field;
     }
-    return sawText ? 0 : null;
+    return sawText ? '' : null;
   }
 
   return null;
+}
+
+export function charsOf(value: unknown): number | null {
+  const text = textOf(value);
+  return text === null ? null : text.length;
+}
+
+/** Identifies identical content so a repeated injection can be recognised as a duplicate. */
+export function hashOf(text: string | null): string | null {
+  if (text === null) return null;
+  return createHash('sha1').update(text).digest('hex').slice(0, 16);
 }
 
 export function estimate(chars: number | null): Pick<Injection, 'size' | 'sizeMethod'> {

@@ -16,7 +16,7 @@ test('each turn carries the injections that preceded it', async () => {
 
   assert.equal(parsed.turns.length, 2);
   assert.deepEqual(parsed.turns[0].injections, [
-    { kind: 'user-message', carrier: 'user', path: null, size: 100, sizeMethod: 'estimated' },
+    { kind: 'user-message', carrier: 'user', path: null, contentHash: null, size: 100, sizeMethod: 'estimated' },
   ]);
 });
 
@@ -36,20 +36,20 @@ test('file reads, attachments, tool results and user messages are distinguished'
     kind: 'file-read',
     carrier: 'Read src/example.ts',
     path: 'src/example.ts',
+    contentHash: null,
     size: 200,
     sizeMethod: 'estimated',
   });
-  assert.deepEqual(injections[1], {
-    kind: 'attachment',
-    carrier: 'attachment',
-    path: null,
-    size: 30,
-    sizeMethod: 'estimated',
-  });
+  assert.equal(injections[1].kind, 'attachment');
+  assert.equal(injections[1].carrier, 'attachment');
+  assert.equal(injections[1].size, 30);
+  assert.equal(injections[1].sizeMethod, 'estimated');
+  assert.match(injections[1].contentHash, /^[0-9a-f]{16}$/);
   assert.deepEqual(injections[2], {
     kind: 'tool-result',
     carrier: 'unknown-tool',
     path: null,
+    contentHash: null,
     size: null,
     sizeMethod: 'unknown',
   });
@@ -94,9 +94,11 @@ test('an attachment whose text lives in content is measured, not unknown', async
 
   assert.equal(result.exitCode, 0);
   const parsed = JSON.parse(result.stdout).sessions[0];
-  assert.deepEqual(parsed.turns[0].injections, [
-    { kind: 'attachment', carrier: 'attachment', path: null, size: 100, sizeMethod: 'estimated' },
-  ]);
+  const attachment = parsed.turns[0].injections[0];
+  assert.equal(attachment.kind, 'attachment');
+  assert.equal(attachment.carrier, 'attachment');
+  assert.equal(attachment.size, 100);
+  assert.match(attachment.contentHash, /^[0-9a-f]{16}$/);
   assert.equal(parsed.unknownInjections, 0);
 });
 
@@ -106,7 +108,7 @@ test('a system block is its own injection kind', async () => {
   assert.equal(result.exitCode, 0);
   const parsed = JSON.parse(result.stdout).sessions[0];
   assert.deepEqual(parsed.turns[0].injections, [
-    { kind: 'system', carrier: 'system', path: null, size: 20, sizeMethod: 'estimated' },
+    { kind: 'system', carrier: 'system', path: null, contentHash: null, size: 20, sizeMethod: 'estimated' },
   ]);
 });
 

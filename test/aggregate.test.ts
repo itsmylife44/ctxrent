@@ -7,7 +7,7 @@ test('audit --all walks every session under a root and reports totals', async ()
   const result = await run(['audit', 'test/fixtures/claude-code', '--all'], nodeDeps);
 
   assert.equal(result.exitCode, 0);
-  assert.match(result.stdout, /sessions 12/);
+  assert.match(result.stdout, /sessions 14/);
   assert.match(result.stdout, /coverage: \d+ sessions with usage, \d+ without/);
 });
 
@@ -15,8 +15,8 @@ test('audit --all states how many sessions the totals are built from', async () 
   const result = await run(['audit', 'test/fixtures/claude-code', '--all', '--json'], nodeDeps);
   const model = JSON.parse(result.stdout);
 
-  assert.equal(model.sessions.length, 12);
-  assert.equal(model.totals.measuredSessions + model.totals.unmeasuredSessions, 12);
+  assert.equal(model.sessions.length, 14);
+  assert.equal(model.totals.measuredSessions + model.totals.unmeasuredSessions, 14);
   assert.ok(model.totals.rent > 0);
 });
 

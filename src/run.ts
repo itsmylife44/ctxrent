@@ -1,7 +1,8 @@
 import { basename, join } from 'node:path';
-import type { SessionSummary } from './model.ts';
+import type { AuditModel, SessionSummary } from './model.ts';
 import { summariseSessions } from './model.ts';
 import { parseSession } from './adapters/index.ts';
+import { prescribe } from './prescriptions.ts';
 import type { Deps } from './deps.ts';
 import { renderText } from './report/text.ts';
 import { renderHtml } from './report/html.ts';
@@ -17,6 +18,7 @@ export type Result = {
 
 const MAX_DEPTH = 8;
 const DEFAULT_TASK_SET = 'ctxrent.json';
+const DEFAULT_MAX_WASTE = 40;
 
 type AuditOptions = {
   target: string | undefined;
@@ -31,6 +33,14 @@ type DiffOptions = {
   b: string | undefined;
 };
 
+type CheckOptions = {
+  target: string | undefined;
+  maxWaste: number;
+  json: boolean;
+};
+
+type Loaded = { ok: true; model: AuditModel } | { ok: false; error: string };
+
 export async function run(argv: string[], deps: Deps): Promise<Result> {
   try {
     return await dispatch(argv, deps);
@@ -41,13 +51,23 @@ export async function run(argv: string[], deps: Deps): Promise<Result> {
 }
 
 async function dispatch(argv: string[], deps: Deps): Promise<Result> {
+  if (argv.length === 0) return runLatest(deps);
+
   const [command, ...rest] = argv;
 
   if (command === 'audit') return runAudit(rest, deps);
+  if (command === 'check') return runCheck(rest, deps);
   if (command === 'init') return runInit(rest, deps);
   if (command === 'diff') return runDiff(rest, deps);
 
-  return failure(`ctxrent: unknown command ${command === undefined ? '(none)' : `"${command}"`}`);
+  return failure(`ctxrent: unknown command "${command}"`);
+}
+
+/** No arguments: the session you just finished is the one you care about. */
+async function runLatest(deps: Deps): Promise<Result> {
+  const file = await latestSessionFile(deps);
+  if (file === null) return failure('ctxrent: no sessions found');
+  return runAudit([file], deps);
 }
 
 async function runAudit(args: string[], deps: Deps): Promise<Result> {
@@ -57,12 +77,83 @@ async function runAudit(args: string[], deps: Deps): Promise<Result> {
   const { target, json, all, html } = parsed.options;
   if (target === undefined) return failure('ctxrent: audit needs a session path');
 
+  const loaded = await loadSessions(target, deps, all);
+  if (!loaded.ok) return failure(loaded.error);
+
+  if (json) {
+    return { exitCode: 0, stdout: `${JSON.stringify(loaded.model, null, 2)}\n`, stderr: '' };
+  }
+  if (html !== null) {
+    await deps.writeArtifact(html, renderHtml(loaded.model));
+    return { exitCode: 0, stdout: `wrote ${html}\n`, stderr: '' };
+  }
+  return { exitCode: 0, stdout: renderText(loaded.model), stderr: '' };
+}
+
+/**
+ * The gate. Exit codes follow the contract developers already know from ESLint and Lighthouse CI:
+ * 0 under the threshold, 1 over it, 2 when the record cannot be measured — never a silent pass.
+ */
+async function runCheck(args: string[], deps: Deps): Promise<Result> {
+  const parsed = parseCheckArgs(args);
+  if (!parsed.ok) return failure(parsed.error);
+
+  const { maxWaste, json } = parsed.options;
+  const target = parsed.options.target ?? (await latestSessionFile(deps));
+  if (target === null) return failure('ctxrent: no sessions found');
+
+  const loaded = await loadSessions(target, deps, false);
+  if (!loaded.ok) return failure(loaded.error);
+
+  const { rent, wasteRent } = loaded.model.totals;
+  if (rent === null || wasteRent === null) {
+    return {
+      exitCode: 2,
+      stdout: json ? `${JSON.stringify({ expected: maxWaste, actual: null, operator: '<=', passed: false })}\n` : '',
+      stderr: 'ctxrent: cannot measure waste for this target\n',
+    };
+  }
+
+  const actual = Math.round((100 * wasteRent) / rent);
+  const passed = actual <= maxWaste;
+
+  if (json) {
+    return {
+      exitCode: passed ? 0 : 1,
+      stdout: `${JSON.stringify({ expected: maxWaste, actual, operator: '<=', passed })}\n`,
+      stderr: '',
+    };
+  }
+
+  const headline = `waste ${actual}% (max ${maxWaste}%) ${passed ? 'ok' : `— over by ${actual - maxWaste} points`}`;
+  if (passed) return { exitCode: 0, stdout: `${headline}\n`, stderr: '' };
+
+  const advice = prescribe({
+    claims: loaded.model.sessions.flatMap((session) => session.waste),
+    carriers: loaded.model.sessions.flatMap((session) => session.carriers),
+    rent: loaded.model.totals.rent,
+  });
+  const lines = [headline, ''];
+  if (advice.length === 0) {
+    lines.push('no rule could classify this waste');
+  } else {
+    lines.push('what to change');
+    for (const [index, item] of advice.entries()) {
+      lines.push(`  ${index + 1}. ${item.advice}`);
+      lines.push(`     would have saved ${item.saving.toLocaleString('en-US')} token-turns`);
+    }
+  }
+
+  return { exitCode: 1, stdout: `${lines.join('\n')}\n`, stderr: '' };
+}
+
+async function loadSessions(target: string, deps: Deps, all: boolean): Promise<Loaded> {
   const sessionFiles = all
     ? await walkSessions(target, deps)
     : await collectSessionFiles(target, deps);
 
   if (sessionFiles.length === 0) {
-    return failure(`ctxrent: no sessions found under ${target}`);
+    return { ok: false, error: `ctxrent: no sessions found under ${target}` };
   }
 
   const sessions: SessionSummary[] = [];
@@ -80,20 +171,9 @@ async function runAudit(args: string[], deps: Deps): Promise<Result> {
     sessions.push(parsedSession.session);
   }
 
-  if (records === 0) {
-    return failure(`ctxrent: no readable sessions under ${target}`);
-  }
+  if (records === 0) return { ok: false, error: `ctxrent: no readable sessions under ${target}` };
 
-  const model = summariseSessions(sessions);
-
-  if (json) return { exitCode: 0, stdout: `${JSON.stringify(model, null, 2)}\n`, stderr: '' };
-
-  if (html !== null) {
-    await deps.writeArtifact(html, renderHtml(model));
-    return { exitCode: 0, stdout: `wrote ${html}\n`, stderr: '' };
-  }
-
-  return { exitCode: 0, stdout: renderText(model), stderr: '' };
+  return { ok: true, model: summariseSessions(sessions) };
 }
 
 async function runInit(args: string[], deps: Deps): Promise<Result> {
@@ -138,6 +218,41 @@ async function runDiff(args: string[], deps: Deps): Promise<Result> {
   if (!outcome.ok) return failure(`ctxrent: ${outcome.error}`);
 
   return { exitCode: 0, stdout: renderDiff(parsedTaskSet.taskSet, outcome.result), stderr: '' };
+}
+
+function parseCheckArgs(
+  args: string[],
+): { ok: true; options: CheckOptions } | { ok: false; error: string } {
+  const options: CheckOptions = { target: undefined, maxWaste: DEFAULT_MAX_WASTE, json: false };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] as string;
+
+    if (argument === '--json') {
+      options.json = true;
+      continue;
+    }
+    if (argument === '--max-waste') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --max-waste needs a percentage' };
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+        return { ok: false, error: 'ctxrent: --max-waste must be between 0 and 100' };
+      }
+      options.maxWaste = parsed;
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith('-')) {
+      return { ok: false, error: `ctxrent: unknown option "${argument}"` };
+    }
+    if (options.target !== undefined) {
+      return { ok: false, error: `ctxrent: unexpected argument "${argument}"` };
+    }
+    options.target = argument;
+  }
+
+  return { ok: true, options };
 }
 
 function parseDiffArgs(
@@ -241,7 +356,23 @@ async function walkSessions(root: string, deps: Deps): Promise<string[]> {
   return found;
 }
 
+async function latestSessionFile(deps: Deps): Promise<string | null> {
+  let best: string | null = null;
+  let bestTime = Number.NEGATIVE_INFINITY;
+
+  for (const root of await deps.defaultRoots()) {
+    for (const file of await walkSessions(root, deps)) {
+      const time = await deps.modifiedAt(file);
+      if (time > bestTime) {
+        bestTime = time;
+        best = file;
+      }
+    }
+  }
+
+  return best;
+}
+
 function failure(message: string): Result {
   return { exitCode: 1, stdout: '', stderr: `${message}\n` };
 }
-

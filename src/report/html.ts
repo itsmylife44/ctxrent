@@ -1,7 +1,13 @@
 import type { AuditModel, SessionSummary, WasteKind } from '../model.ts';
+import { prescribe } from '../prescriptions.ts';
 
 const numbers = new Intl.NumberFormat('en-US');
-const WASTE_ORDER: WasteKind[] = ['superseded-read', 'dead-payload', 'retry-loop'];
+const WASTE_ORDER: WasteKind[] = [
+  'duplicate-context',
+  'superseded-read',
+  'dead-payload',
+  'retry-loop',
+];
 const AGGREGATE_LIMIT = 100;
 
 export function renderHtml(model: AuditModel): string {
@@ -67,6 +73,7 @@ function hero(session: SessionSummary): string {
 </section>
 ${carriers(session)}
 ${waste(session)}
+${whatToChange(session)}
 ${skills(session)}`;
 }
 
@@ -110,6 +117,23 @@ function waste(session: SessionSummary): string {
       ),
   );
   return block('Waste', rows.join('\n'));
+}
+
+function whatToChange(session: SessionSummary): string {
+  const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
+  if (advice.length === 0) return '';
+
+  const rows = advice
+    .map(
+      (item, index) => `<div class="row">
+      <span class="name">${index + 1}. ${escape(item.advice)}</span>
+      <span class="bar"><i style="width:${Math.max(2, Math.round((100 * item.saving) / (advice[0]?.saving ?? 1)))}%"></i></span>
+      <span class="val">${numbers.format(item.saving)} token-turns</span>
+    </div>`,
+    )
+    .join('\n');
+
+  return block('What to change', rows);
 }
 
 function skills(session: SessionSummary): string {
