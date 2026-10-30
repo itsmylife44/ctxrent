@@ -177,3 +177,31 @@ test('applying keeps the rules that were already there', async () => {
   assert.match(written, /Keep this custom rule\./);
   assert.match(written, /Read files with the Read tool/);
 });
+
+test('a rule already in the file is not proposed again', async () => {
+  const result = await run(['audit', 'test/fixtures/claude-code/waste', '--json'], nodeDeps);
+  const model = JSON.parse(result.stdout);
+
+  const page = renderReview({
+    token: 'tok',
+    model,
+    target: '/tmp/CLAUDE.md',
+    existingRules: [
+      'Read files with the Read tool (offset/limit), never by piping them through Bash.',
+    ],
+    teachings: [
+      {
+        id: 'read-via-read-tool',
+        advice: 'Read files with the Read tool (offset/limit), never by piping them through Bash.',
+        lever: 'instruction',
+        saving: 10,
+        claims: 1,
+        sessions: 3,
+        example: 'Bash cat a.md',
+      },
+    ],
+  });
+
+  assert.equal(page.match(/name="rule"/g), null);
+  assert.match(page, /Nothing new/);
+});

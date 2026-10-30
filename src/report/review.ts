@@ -14,7 +14,10 @@ export type ReviewPage = {
 
 export function renderReview(input: ReviewPage): string {
   const { model, teachings, target, token, existingRules } = input;
-  const instructions = teachings.filter((item) => item.lever === 'instruction');
+  const alreadyThere = new Set(existingRules);
+  const instructions = teachings.filter(
+    (item) => item.lever === 'instruction' && !alreadyThere.has(item.advice),
+  );
   const configured = teachings.filter((item) => item.lever === 'configuration');
   const top = model.sessions
     .flatMap((session) => session.carriers)
@@ -56,10 +59,14 @@ ${existingRules
 }
 
 <h2>New rules from this run</h2>
-<p class="note">Each rule recurs across your sessions. Untick anything you do not want.</p>
+${
+  instructions.length === 0
+    ? '<p class="note">Nothing new: today\'s sessions add no rule that is not already in the file.</p>'
+    : `<p class="note">Each rule recurs across your sessions. Untick anything you do not want.</p>
 <div class="rules">
 ${instructions.map((item) => rule(item)).join('\n')}
-</div>
+</div>`
+}
 
 <div class="target">
 <label for="target">Instruction file your agent reads in every project</label>
