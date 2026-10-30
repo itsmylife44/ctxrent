@@ -33,7 +33,10 @@ const PATTERNS: Pattern[] = [
     id: 'read-via-read-tool',
     label: 'files read through Bash (cat, sed, head, tail, awk, nl) instead of the Read tool',
     lever: 'instruction',
-    test: (claim) => /^Bash (cat|sed|head|tail|awk|nl)\b/.test(claim.carrier),
+    // `cat > file`, `cat <<EOF` and `sed -i` write a file: there is no read to move to the Read tool.
+    test: (claim) =>
+      /^Bash (cat|sed|head|tail|awk|nl)\b/.test(claim.carrier) &&
+      !/^Bash (cat\s*(>|<<)|sed\s+-i)/.test(claim.carrier),
   },
   {
     id: 'uncapped-diff',

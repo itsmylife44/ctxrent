@@ -38,3 +38,14 @@ test('an always-on attachment is a configuration finding, not an instruction', a
   assert.equal(findings[0]?.lever, 'configuration');
   assert.match(findings[0]?.label ?? '', /re-injected on every turn/);
 });
+
+test('writing a file through Bash is not a read to move to the Read tool', () => {
+  const claim = (carrier: string) => ({ kind: 'dead-payload' as const, carrier, rent: 1000, turns: [1], reason: 'r' });
+  const ids = (carrier: string) =>
+    findPatterns({ claims: [claim(carrier)], carriers: [], rent: 1000 }, 10).map((item) => item.id);
+
+  assert.ok(!ids('Bash cat > q.ps1 <<EOF').includes('read-via-read-tool'));
+  assert.ok(!ids('Bash cat <<EOF > notes.md').includes('read-via-read-tool'));
+  assert.ok(!ids("Bash sed -i 's/a/b/' x.ts").includes('read-via-read-tool'));
+  assert.ok(ids('Bash cat src/x.ts').includes('read-via-read-tool'));
+});
