@@ -159,6 +159,13 @@ test('with no arguments a terminal opens the page you can apply from', async () 
     async writeArtifact(path: string, content: string) {
       written.push({ path, content });
     },
+    async execFile() {
+      return {
+        code: 0,
+        stdout: '- Read files with the Read tool. <!-- id: read-via-read-tool -->',
+        stderr: '',
+      };
+    },
     async openUrl(url: string) {
       opened = url;
       const form = new URLSearchParams();
