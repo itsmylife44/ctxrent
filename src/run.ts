@@ -73,7 +73,7 @@ function render(model: AuditModel): string {
       session.tokens === null
         ? 'tokens unavailable'
         : `${formatNumber.format(session.tokens.total)} tokens`;
-    return `${session.sessionId}  ${session.turns} turns  ${spend}`;
+    return `${session.sessionId}  ${session.turns.length} turns  ${spend}`;
   });
 
   const unmeasured =

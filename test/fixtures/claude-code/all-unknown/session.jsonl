@@ -1,0 +1,2 @@
+{"type":"user","sessionId":"fixture-all-unknown","uuid":"u1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_9","content":[{"type":"image","source":{"type":"base64"}}]}]}}
+{"type":"assistant","sessionId":"fixture-all-unknown","uuid":"a1","message":{"id":"msg_1","role":"assistant","content":[],"usage":{"input_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"output_tokens":1}}}

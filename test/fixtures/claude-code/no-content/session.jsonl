@@ -1,0 +1,2 @@
+{"type":"user","sessionId":"fixture-no-content","uuid":"u1","message":{"role":"user"}}
+{"type":"assistant","sessionId":"fixture-no-content","uuid":"a1","message":{"id":"msg_1","role":"assistant","content":[],"usage":{"input_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"output_tokens":1}}}

@@ -19,7 +19,7 @@ test('audit counts a repeated message id once', async () => {
   const model = JSON.parse(result.stdout);
 
   // A naive sum over 3 assistant records yields 1174; the duplicated id must not count twice.
-  assert.equal(model.sessions[0].turns, 2);
+  assert.equal(model.sessions[0].turns.length, 2);
   assert.equal(model.sessions[0].tokens.total, 852);
 });
 
@@ -31,7 +31,7 @@ test('audit --json returns the session model', async () => {
   assert.equal(model.sessions.length, 1);
   assert.equal(model.sessions[0].sessionId, 'fixture-minimal');
   assert.equal(model.sessions[0].adapter, 'claude-code');
-  assert.equal(model.sessions[0].turns, 2);
+  assert.equal(model.sessions[0].turns.length, 2);
   assert.deepEqual(model.sessions[0].tokens, {
     input: 7,
     cacheRead: 600,
@@ -75,7 +75,7 @@ test('a session without usage reports its tokens as unavailable, not zero', asyn
 
   assert.equal(result.exitCode, 0);
   const model = JSON.parse(result.stdout);
-  assert.equal(model.sessions[0].turns, 1);
+  assert.equal(model.sessions[0].turns.length, 1);
   assert.equal(model.sessions[0].tokens, null);
   assert.equal(model.totals.unmeasuredSessions, 1);
   assert.match(result.stdout, /"tokens": null/);

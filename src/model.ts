@@ -8,11 +8,37 @@ export type TokenTotals = {
   total: number;
 };
 
+export type InjectionKind =
+  | 'user-message'
+  | 'tool-result'
+  | 'file-read'
+  | 'attachment'
+  | 'system';
+
+export type Injection = {
+  kind: InjectionKind;
+  carrier: string;
+  size: number | null;
+  sizeMethod: 'estimated' | 'unknown';
+};
+
+export type Turn = {
+  index: number;
+  messageId: string;
+  contextTokens: number | null;
+  outputTokens: number | null;
+  injections: Injection[];
+};
+
 export type SessionSummary = {
   sessionId: string;
   adapter: AdapterId;
-  turns: number;
+  turns: Turn[];
   tokens: TokenTotals | null;
+  injectedTokens: number | null;
+  injectionCount: number;
+  unknownInjections: number;
+  residualContextTokens: number | null;
 };
 
 export type AuditModel = {
@@ -20,6 +46,8 @@ export type AuditModel = {
   totals: {
     turns: number;
     tokens: TokenTotals;
+    injectedTokens: number;
+    unknownInjections: number;
     measuredSessions: number;
     unmeasuredSessions: number;
   };
@@ -43,9 +71,13 @@ export function summariseSessions(sessions: SessionSummary[]): AuditModel {
   let tokens: TokenTotals = emptyTokens();
   let turns = 0;
   let measuredSessions = 0;
+  let injectedTokens = 0;
+  let unknownInjections = 0;
 
   for (const session of sessions) {
-    turns += session.turns;
+    turns += session.turns.length;
+    injectedTokens += session.injectedTokens ?? 0;
+    unknownInjections += session.unknownInjections;
     if (session.tokens === null) continue;
     measuredSessions += 1;
     tokens = addTokens(tokens, session.tokens);
@@ -56,6 +88,8 @@ export function summariseSessions(sessions: SessionSummary[]): AuditModel {
     totals: {
       turns,
       tokens,
+      injectedTokens,
+      unknownInjections,
       measuredSessions,
       unmeasuredSessions: sessions.length - measuredSessions,
     },
