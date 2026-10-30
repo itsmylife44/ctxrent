@@ -119,3 +119,39 @@ test('a failure below the seam becomes a diagnostic, not a rejected promise', as
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /permission denied/);
 });
+
+test('--html opens the report when a person is there, and says so', async () => {
+  const opened: string[] = [];
+  const deps = {
+    ...nodeDeps,
+    interactive: true,
+    async openUrl(url: string) {
+      opened.push(url);
+    },
+    async writeArtifact() {},
+  };
+
+  const result = await run(['audit', waste, '--html', 'report.html'], deps);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(opened.length, 1);
+  assert.match(opened[0] ?? '', /report\.html$/);
+  assert.match(result.stdout, /and opened it/);
+});
+
+test('--no-open writes the report without opening a browser', async () => {
+  const opened: string[] = [];
+  const deps = {
+    ...nodeDeps,
+    interactive: true,
+    async openUrl(url: string) {
+      opened.push(url);
+    },
+    async writeArtifact() {},
+  };
+
+  const result = await run(['audit', waste, '--html', 'report.html', '--no-open'], deps);
+
+  assert.equal(opened.length, 0);
+  assert.equal(result.stdout.trim(), 'wrote report.html');
+});

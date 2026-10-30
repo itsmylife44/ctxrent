@@ -1,4 +1,4 @@
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import type { AuditModel, SessionSummary } from './model.ts';
 import { summariseSessions } from './model.ts';
 import { parseSession } from './adapters/index.ts';
@@ -30,6 +30,7 @@ type AuditOptions = {
   json: boolean;
   all: boolean;
   html: string | null;
+  open: boolean;
 };
 
 type DiffOptions = {
@@ -63,7 +64,8 @@ Usage
   ctxrent audit <path>           a session file, or a directory of sessions
       --all                      walk the path recursively
       --json                     print the model instead of the report
-      --html <file>              write a single-file report
+      --html <file>              write a single-file report, and open it
+      --no-open                  write the report without opening it
   ctxrent check [path]           exit 0 under the threshold, 1 over, 2 cannot measure
       --max-waste <pct>          threshold, default 40
       --all                      walk the path recursively
@@ -112,7 +114,7 @@ async function runAudit(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseAuditArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { target, json, all, html } = parsed.options;
+  const { target, json, all, html, open } = parsed.options;
   if (target === undefined) return failure('ctxrent: audit needs a session path');
 
   const loaded = await loadSessions(target, deps, all);
@@ -123,7 +125,17 @@ async function runAudit(args: string[], deps: Deps): Promise<Result> {
   }
   if (html !== null) {
     await deps.writeArtifact(html, renderHtml(loaded.model));
-    return { exitCode: 0, stdout: `wrote ${html}\n`, stderr: '' };
+
+    // A report exists to be looked at, but opening a browser is only right where a person is
+    // waiting: in a pipe or a CI job the path is the useful output.
+    const shouldOpen = open && deps.interactive;
+    if (shouldOpen) await deps.openUrl(resolve(html));
+
+    return {
+      exitCode: 0,
+      stdout: `wrote ${html}${shouldOpen ? ' and opened it' : ''}\n`,
+      stderr: '',
+    };
   }
   return { exitCode: 0, stdout: renderText(loaded.model), stderr: '' };
 }
@@ -593,7 +605,13 @@ function parseDiffArgs(
 function parseAuditArgs(
   args: string[],
 ): { ok: true; options: AuditOptions } | { ok: false; error: string } {
-  const options: AuditOptions = { target: undefined, json: false, all: false, html: null };
+  const options: AuditOptions = {
+    target: undefined,
+    json: false,
+    all: false,
+    html: null,
+    open: true,
+  };
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index] as string;
@@ -604,6 +622,10 @@ function parseAuditArgs(
     }
     if (argument === '--all') {
       options.all = true;
+      continue;
+    }
+    if (argument === '--no-open') {
+      options.open = false;
       continue;
     }
     if (argument === '--html') {

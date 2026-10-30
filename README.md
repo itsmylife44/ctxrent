@@ -72,7 +72,7 @@ waste 2,600 token-turns (44% of rent)
   retry-loop               300   1 claim(s)
 ```
 
-`--html report.html` writes the same thing as one self-contained file: light and dark, no external references, no scripting.
+`--html report.html` writes the same thing as one self-contained file — light and dark, no external references, no scripting — and opens it in your browser when a terminal is attached. In a pipe or a CI job it writes the file and prints the path instead, because opening a browser there would be wrong; `--no-open` forces that behaviour everywhere.
 
 ## What it finds
 
