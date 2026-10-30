@@ -1,5 +1,5 @@
 import type { AuditModel, SessionSummary, WasteKind } from '../model.ts';
-import { prescribe } from '../prescriptions.ts';
+import { findPatterns } from '../prescriptions.ts';
 import { escapeHtml, page, short } from './theme.ts';
 
 const numbers = new Intl.NumberFormat('en-US');
@@ -24,7 +24,7 @@ export function renderHtml(model: AuditModel): string {
 }
 
 function sessionBody(session: SessionSummary): string {
-  const advice = prescribe({
+  const findings = findPatterns({
     claims: session.waste,
     carriers: session.carriers,
     rent: session.rent,
@@ -46,7 +46,7 @@ function sessionBody(session: SessionSummary): string {
 
 <p>${problemSentence(top, session.rent, session.wasteRent)}</p>
 
-${advice.length === 0 ? '' : section('What to change', adviceList(advice))}
+${findings.length === 0 ? '' : section('What was observed', findingList(findings))}
 
 ${section('Where the rent goes', bars(session.carriers, session.rent))}
 
@@ -116,14 +116,14 @@ function section(title: string, body: string): string {
 ${body}`;
 }
 
-function adviceList(advice: ReturnType<typeof prescribe>): string {
-  const rows = advice
+function findingList(findings: ReturnType<typeof findPatterns>): string {
+  const rows = findings
     .map(
       (item, index) => `<div class="rule">
   <span class="saving">${index + 1}</span>
   <span>
-    <span class="rule-title">${escapeHtml(item.advice)}</span>
-    <span class="rule-meta">${numbers.format(item.claims)} claims, ${numbers.format(item.saving)} token-turns${item.basis === 'always-on' ? ', always-on context not counted as waste' : ''}</span>
+    <span class="rule-title">${escapeHtml(item.label)}</span>
+    <span class="rule-meta">${numbers.format(item.claims)} claims, ${numbers.format(item.saving)} token-turns, ${escapeHtml(item.lever)}</span>
     <span class="rule-eg">e.g. ${escapeHtml(short(item.example, 90))}</span>
   </span>
   <span class="saving">${numbers.format(item.saving)}</span>

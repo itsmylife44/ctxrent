@@ -14,51 +14,60 @@ export type TeachReport = {
   teachings: Teaching[];
   sessionCount: number;
   turns: number;
-  block: string;
+  /** The block, when a runner wrote rules; null when nothing was written. */
+  block: string | null;
+  brief: string;
   plan: TeachPlan | null;
   outcome: TeachOutcome;
 };
 
 export function renderTeach(report: TeachReport): string {
   const lines: string[] = [];
-  const instructions = report.teachings.filter((item) => item.lever === 'instruction');
   const configured = report.teachings.filter((item) => item.lever === 'configuration');
 
   lines.push(
-    `${numbers.format(report.sessionCount)} sessions · ${numbers.format(report.turns)} turns analysed · ${report.teachings.length} rules with evidence`,
+    `${numbers.format(report.sessionCount)} sessions · ${numbers.format(report.turns)} turns analysed · ${report.teachings.length} findings`,
   );
 
   if (report.teachings.length === 0) {
     lines.push('');
-    lines.push('no rule recurs in enough sessions to be worth writing down');
+    lines.push('no pattern recurs in enough sessions to be worth writing down');
     return `${lines.join('\n')}\n`;
   }
 
   lines.push('');
-  lines.push('rules');
   const width = Math.max(...report.teachings.map((item) => item.id.length), 8);
   for (const item of report.teachings) {
     lines.push(
       `  ${item.id.padEnd(width)}  ${item.lever.padEnd(14)}${numbers.format(item.claims).padStart(6)} claims · ${String(item.sessions).padStart(5)} sessions · ${numbers.format(item.saving).padStart(13)} token-turns`,
     );
+    lines.push(`    observed: ${item.label}`);
   }
 
   if (configured.length > 0) {
     lines.push('');
     lines.push('configuration findings — these are not instructions:');
     for (const item of configured) {
-      lines.push(`  ${item.id}`);
-      lines.push(`    ${item.advice}`);
-      lines.push(`    evidence: ${numbers.format(item.claims)} claims in ${item.sessions} sessions`);
+      lines.push(`  ${item.id}: ${item.label}`);
     }
     lines.push('  told to the agent in an instruction file, none of these can take effect.');
   }
 
   lines.push('');
 
+  if (report.block === null) {
+    lines.push('no rule was written. The wording is not the tool\'s to invent: hand this brief to');
+    lines.push('your agent, or let ctxrent call it for you:');
+    lines.push('');
+    lines.push('  ctxrent teach --agent claude --write ~/.claude/CLAUDE.md');
+    lines.push('');
+    lines.push('--- brief ---');
+    lines.push(report.brief);
+    return `${lines.join('\n')}\n`;
+  }
+
   if (report.plan === null) {
-    lines.push('dry run — nothing will be written. Copy the block below into an instruction file,');
-    lines.push('or re-run with --write <file> to preview an application.');
+    lines.push('dry run — nothing will be written.');
     lines.push('');
     lines.push(report.block);
     return `${lines.join('\n')}\n`;
@@ -66,7 +75,6 @@ export function renderTeach(report: TeachReport): string {
 
   lines.push(`target   ${report.plan.path}`);
   lines.push(`file     ${report.plan.state}`);
-  lines.push(`contents ${instructions.length} rule(s), inside the ctxrent managed block`);
   lines.push('');
   lines.push(report.block);
   lines.push('');

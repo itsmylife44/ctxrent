@@ -1,109 +1,111 @@
 import type { CarrierRent, WasteClaim } from './model.ts';
 
-export type Prescription = {
+/**
+ * A finding is evidence, not advice: what pattern was observed, how much rent it explains, and the
+ * command that caused it. The sentence the user ends up reading is written by their own agent from
+ * this evidence, so no wording is baked into the tool.
+ */
+export type Finding = {
   id: string;
+  /** What was observed, stated as data. Not a rule, not an instruction. */
+  label: string;
+  lever: 'instruction' | 'configuration';
   saving: number;
   claims: number;
-  advice: string;
   example: string;
-  /** `waste` is rent that stopped being useful; `always-on` is context that never stops. */
-  basis: 'waste' | 'always-on';
 };
 
-export type PrescriptionInput = {
+export type FindingInput = {
   claims: WasteClaim[];
   carriers: CarrierRent[];
   rent: number | null;
 };
 
-type Rule = {
+type Pattern = {
   id: string;
+  label: string;
+  lever: 'instruction' | 'configuration';
   test: (claim: WasteClaim) => boolean;
-  advice: string;
 };
 
-/**
- * A prescription is a rule plus an amount, matching the documented shape of a recommendation
- * (Lighthouse carries `wastedBytes` per opportunity). Advice is phrased as a line the user can put
- * in AGENTS.md, because the user cannot stop an agent from running a command — only steer it.
- */
-const RULES: Rule[] = [
+const PATTERNS: Pattern[] = [
   {
     id: 'read-via-read-tool',
+    label: 'files read through Bash (cat, sed, head, tail, awk, nl) instead of the Read tool',
+    lever: 'instruction',
     test: (claim) => /^Bash (cat|sed|head|tail|awk|nl)\b/.test(claim.carrier),
-    advice: 'Read files with the Read tool (offset/limit), never by piping them through Bash.',
   },
   {
     id: 'uncapped-diff',
+    label: 'whole diffs printed through Bash (git diff, show, log)',
+    lever: 'instruction',
     test: (claim) => /^Bash git (diff|show|log)\b/.test(claim.carrier),
-    advice: 'Start with `git diff --stat`, then open the one file you need; cap any diff you print.',
   },
   {
     id: 'refetch-remote',
+    label: 'the same issue or pull request fetched again in one session (gh)',
+    lever: 'instruction',
     test: (claim) => /^Bash gh \b/.test(claim.carrier),
-    advice: 'Do not re-fetch an issue or pull request you have already read in this session.',
   },
   {
     id: 'search-via-grep-tool',
+    label: 'searches piped through Bash (grep, rg, ag, ack) instead of the Grep tool',
+    lever: 'instruction',
     test: (claim) => /^Bash (grep|rg|ag|ack)\b/.test(claim.carrier),
-    advice:
-      'Search with the Grep tool, which returns a bounded result, instead of piping grep through Bash.',
   },
   {
     id: 'list-heavy',
+    label: 'directory trees listed through Bash (ls, find, tree)',
+    lever: 'instruction',
     test: (claim) => /^Bash (ls|find|tree)\b/.test(claim.carrier),
-    advice: 'List a directory once, with a depth limit, instead of re-listing trees.',
   },
   {
     id: 'duplicate-context',
+    label: 'the same attachment text injected twice inside one context epoch',
+    lever: 'configuration',
     test: (claim) => claim.kind === 'duplicate-context',
-    advice: 'Stop re-injecting an attachment that is already in the context verbatim.',
   },
   {
     id: 'superseded-read',
+    label: 'a file read and then rewritten later in the session',
+    lever: 'instruction',
     test: (claim) => claim.kind === 'superseded-read',
-    advice: 'Read a file after editing it, or read only the section you are about to change.',
   },
   {
     id: 'repeated-command',
+    label: 'the same command run again within two turns',
+    lever: 'instruction',
     test: (claim) => claim.kind === 'retry-loop',
-    advice: 'Check a command before re-running it; each retry keeps paying rent on its own failure.',
   },
   {
     id: 'cap-command-output',
+    label: 'large command output that is never referenced again',
+    lever: 'instruction',
     test: (claim) => claim.kind === 'dead-payload',
-    advice:
-      'Cap what a command prints: pipe it through head, or write it to a file and read only the part you need.',
   },
 ];
 
 const ALWAYS_ON_MIN_TOKENS = 2000;
 
-/**
- * Advice also comes from carriers, not only from waste: a large always-on attachment is the
- * biggest rent line in real sessions and never produces a waste claim, because nothing about it
- * stopped being useful — it is simply always there.
- */
-function fromCarriers(input: PrescriptionInput): Prescription[] {
+function fromCarriers(input: FindingInput): Finding[] {
   if (input.rent === null || input.rent === 0) return [];
 
   return input.carriers
     .filter((carrier) => carrier.carrier === 'attachment' && carrier.size >= ALWAYS_ON_MIN_TOKENS)
     .map((carrier) => ({
       id: 'attachment-bloat',
+      label: 'an attachment re-injected on every turn (hook output, skill listing)',
+      lever: 'configuration' as const,
       saving: carrier.rent,
       claims: 1,
-      basis: 'always-on',
-      advice:
-        'Move fixed context into a file the agent reads on demand, not an always-on attachment.',
       example: `attachment, ${carrier.size.toLocaleString('en-US')} tokens across ${carrier.injections.toLocaleString('en-US')} injections`,
     }));
 }
 
-export function prescribe(input: PrescriptionInput, limit = 3): Prescription[] {
-  const grouped = new Map<string, Prescription>();
+export function findPatterns(input: FindingInput, limit = 3): Finding[] {
+  const grouped = new Map<string, Finding>();
 
-  const add = (item: Prescription): void => {
+  const add = (item: Finding): void => {
     const existing = grouped.get(item.id);
     if (existing) {
       existing.saving += item.saving;
@@ -114,24 +116,19 @@ export function prescribe(input: PrescriptionInput, limit = 3): Prescription[] {
   };
 
   for (const claim of input.claims) {
-    const rule = RULES.find((candidate) => candidate.test(claim));
-    if (rule === undefined) continue;
+    const pattern = PATTERNS.find((candidate) => candidate.test(claim));
+    if (pattern === undefined) continue;
     add({
-      id: rule.id,
+      id: pattern.id,
+      label: pattern.label,
+      lever: pattern.lever,
       saving: claim.rent,
       claims: 1,
-      advice: rule.advice,
       example: claim.carrier,
-      basis: 'waste',
     });
   }
 
   for (const item of fromCarriers(input)) add(item);
 
   return [...grouped.values()].sort((a, b) => b.saving - a.saving).slice(0, limit);
-}
-
-/** The same line, shaped for AGENTS.md. */
-export function instruction(prescription: Prescription): string {
-  return `- ${prescription.advice}`;
 }

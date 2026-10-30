@@ -1,11 +1,12 @@
 import type { SessionSummary } from './model.ts';
-import { prescribe } from './prescriptions.ts';
+import { findPatterns } from './prescriptions.ts';
 
 export type Lever = 'instruction' | 'configuration';
 
 export type Teaching = {
   id: string;
-  advice: string;
+  /** What was observed. Data, not a rule: the sentence is written later by the agent. */
+  label: string;
   lever: Lever;
   saving: number;
   claims: number;
@@ -17,32 +18,19 @@ export type TeachOptions = {
   minSessions: number;
 };
 
-const LEVERS: Record<string, Lever> = {
-  'read-via-read-tool': 'instruction',
-  'uncapped-diff': 'instruction',
-  'refetch-remote': 'instruction',
-  'search-via-grep-tool': 'instruction',
-  'list-heavy': 'instruction',
-  'duplicate-context': 'configuration',
-  'superseded-read': 'instruction',
-  'repeated-command': 'instruction',
-  'cap-command-output': 'instruction',
-  'attachment-bloat': 'configuration',
-};
-
 /**
- * Aggregates what every session says into rules with evidence. A rule only earns a place in the
- * instruction file if it appears in several sessions: one bad afternoon is not a habit.
+ * Aggregates what every session observed into findings with evidence. A finding only earns a place
+ * if it appears in several sessions: one bad afternoon is not a habit.
  */
 export function teach(sessions: SessionSummary[], options: TeachOptions): Teaching[] {
   const grouped = new Map<string, Teaching>();
 
   for (const session of sessions) {
-    const advice = prescribe(
+    const found = findPatterns(
       { claims: session.waste, carriers: session.carriers, rent: session.rent },
       10,
     );
-    for (const item of advice) {
+    for (const item of found) {
       const existing = grouped.get(item.id);
       if (existing) {
         existing.saving += item.saving;
@@ -52,8 +40,8 @@ export function teach(sessions: SessionSummary[], options: TeachOptions): Teachi
       }
       grouped.set(item.id, {
         id: item.id,
-        advice: item.advice,
-        lever: LEVERS[item.id] ?? 'instruction',
+        label: item.label,
+        lever: item.lever,
         saving: item.saving,
         claims: item.claims,
         sessions: 1,
@@ -76,8 +64,8 @@ export function composeBlock(rules: ManagedRule[], sessionCount: number): string
     '<!-- ctxrent:begin -->',
     '## Context hygiene',
     '',
-    `Measured by ctxrent on ${sessionCount.toLocaleString('en-US')} sessions. Each line is a habit that`,
-    'recurred across sessions; re-run `ctxrent teach` to update this block.',
+    `Measured by ctxrent on ${sessionCount.toLocaleString('en-US')} sessions. Each line was written`,
+    'from that evidence; re-run `ctxrent teach` to review and update this block.',
     '',
   ];
 
@@ -86,22 +74,6 @@ export function composeBlock(rules: ManagedRule[], sessionCount: number): string
   }
   lines.push('<!-- ctxrent:end -->');
   return lines.join('\n');
-}
-
-export function instructionBlock(
-  teachings: Teaching[],
-  sessionCount: number,
-  selected?: string[],
-): string {
-  return composeBlock(
-    teachings
-      .filter(
-        (item) =>
-          item.lever === 'instruction' && (selected === undefined || selected.includes(item.id)),
-      )
-      .map((item) => ({ id: item.id, advice: item.advice })),
-    sessionCount,
-  );
 }
 
 /** The rules already written between the markers, so an update never erases what is there. */
@@ -134,7 +106,7 @@ export function readManagedRules(existing: string | null): ManagedRule[] {
 
 /**
  * Matching is by rule id, so a rule the user rewrote keeps their wording instead of being
- * duplicated beside the canonical sentence.
+ * duplicated beside a second version.
  */
 export function mergeRules(existing: ManagedRule[], proposed: ManagedRule[]): ManagedRule[] {
   const key = (rule: ManagedRule): string => rule.id ?? `text:${rule.advice}`;

@@ -53,23 +53,31 @@ session fixture-waste
 
 rent 5,850 token-turns   score 56/100
 
-what to change
-  1. 1,800 token-turns · 1 claim(s)
-     Cap what a command prints: pipe it through head, or write it to a file and…
+what was observed
+  1. 1,800 token-turns · 1 claim(s) · instruction
+     large command output that is never referenced again
      e.g. Grep x
-  2. 500 token-turns · 1 claim(s)
-     Read a file after editing it, or read only the section you are about to ch…
+  2. 500 token-turns · 1 claim(s) · instruction
+     a file read and then rewritten later in the session
      e.g. Read src/x.ts
+  3. 300 token-turns · 1 claim(s) · instruction
+     directory trees listed through Bash (ls, find, tree)
+     e.g. Bash ls
 
 top carriers
   Grep x                             2,400 rent     600 tok        t4–4
   Bash ls                            2,100 rent     800 tok     t5–6 ×2
   user                                 700 rent     100 tok        t1–1
+  Read src/x.ts                        600 rent     100 tok        t2–2
+  Edit src/x.ts                         50 rent      10 tok        t3–3
 
 waste 2,600 token-turns (44% of rent)
   superseded-read          500   1 claim(s)
+    Read src/x.ts — read at turn 2, rewritten at turn 2
   dead-payload           1,800   1 claim(s)
+    Grep x — carrier never used again, 3 turns of rent left to pay
   retry-loop               300   1 claim(s)
+    Bash ls — same carrier injected again within 2 turns
 ```
 
 In a terminal, `ctxrent` on its own prints the text report and then opens the **review page**: served only on loopback, it shows the rules already in your file first, then the new ones, each with its evidence, and applies only what stays ticked. That is the whole flow — no file path, no second command, and nothing removed unless you untick it.
@@ -95,29 +103,39 @@ The static report is one self-contained file — light and dark, no external ref
 
 A claim always names the carrier and the turns that justify it. A class that cannot be decided from the record produces no claim, and a session with nothing measurable reports rent and waste as unavailable rather than zero.
 
-## What to change
+## What was observed
 
-Every report ends with the two or three changes that would have saved the most. Each carries an amount and a line you can paste into `AGENTS.md`, because you cannot stop an agent from running `cat` — you can only steer it.
+Every report ends with the two or three patterns that explain the most rent, each with an amount, the command that caused it, and whether it can be fixed by an instruction or only by configuration.
 
-A change that comes from always-on context — an attachment re-injected every turn — is labelled as such, because it is not waste: nothing stopped being useful, the content simply never stops being sent. That is also why such a session can score 100/100 while its largest cost is still worth fixing: the score measures waste, the recommendation measures rent.
+**The tool does not write the rule.** A sentence is a judgement about your project, and it belongs to the agent that reads the file. ctxrent produces the evidence; your agent writes the sentence from it; ctxrent validates the format and keeps the id so a rewrite is never duplicated.
+
+A pattern that comes from always-on context — an attachment re-injected every turn — is marked `configuration`, because it is not waste: nothing stopped being useful, the content simply never stops being sent. That is also why a session can score 100/100 while its largest cost is still worth fixing.
 
 ## Teach the agent
 
-`ctxrent teach` aggregates every session into rules with evidence and keeps only the ones that recur. A rule that appeared once is an afternoon, not a habit.
+`ctxrent teach` aggregates every session into findings and keeps only the ones that recur. A pattern seen once is an afternoon, not a habit.
 
 ```
-4,029 sessions · 163,968 turns analysed · 10 rules with evidence
+4,029 sessions · 163,968 turns analysed · 10 findings
 
-rules
   attachment-bloat      configuration  3,533 claims ·  3533 sessions · 3,138,375,885 token-turns
+    observed: an attachment re-injected on every turn (hook output, skill listing)
   read-via-read-tool    instruction   10,897 claims ·  2300 sessions · 1,093,155,287 token-turns
-  cap-command-output    instruction   14,654 claims ·  2470 sessions · 1,077,805,681 token-turns
+    observed: files read through Bash (cat, sed, head, tail, awk, nl) instead of the Read tool
 ```
 
-It separates two levers, because conflating them produces advice that cannot work:
+With `--agent`, ctxrent hands that evidence to your own agent, which writes the rules:
 
-- **instruction** — the agent can choose differently, so a line in `CLAUDE.md` / `AGENTS.md` changes the behaviour.
-- **configuration** — the record is dominated by something the agent does not control, such as an always-on attachment from a hook. Telling the agent about it does nothing; the fix is to turn the hook off.
+```bash
+ctxrent teach --agent claude --language en --write ~/.claude/CLAUDE.md
+```
+
+The brief asks for one line per finding, in a given language, imperative, at most twenty words, in the form `- <the rule> <!-- id: <finding id> -->`. ctxrent keeps only lines with a known id and a sane length, so prose, invented ids or a runaway answer never reach the file. `--brief` prints the brief and stops, if you would rather hand it over yourself.
+
+Findings carry two levers, because conflating them produces rules that cannot work:
+
+- **instruction** — the agent can choose differently, so a line in `CLAUDE.md` / `AGENTS.md` changes the behaviour. These are the only findings sent to the writer.
+- **configuration** — the record is dominated by something the agent does not control, such as an always-on attachment from a hook. Telling the agent about it does nothing; the fix is to turn the hook off. These are reported, never written.
 
 ### Nothing is written without consent
 

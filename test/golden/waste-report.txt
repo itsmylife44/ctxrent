@@ -3,15 +3,15 @@ session fixture-waste
 
 rent 5,850 token-turns   score 56/100
 
-what to change
-  1. 1,800 token-turns · 1 claim(s)
-     Cap what a command prints: pipe it through head, or write it to a file and…
+what was observed
+  1. 1,800 token-turns · 1 claim(s) · instruction
+     large command output that is never referenced again
      e.g. Grep x
-  2. 500 token-turns · 1 claim(s)
-     Read a file after editing it, or read only the section you are about to ch…
+  2. 500 token-turns · 1 claim(s) · instruction
+     a file read and then rewritten later in the session
      e.g. Read src/x.ts
-  3. 300 token-turns · 1 claim(s)
-     List a directory once, with a depth limit, instead of re-listing trees.
+  3. 300 token-turns · 1 claim(s) · instruction
+     directory trees listed through Bash (ls, find, tree)
      e.g. Bash ls
 
 top carriers

@@ -1,5 +1,5 @@
 import type { AuditModel, SessionSummary, WasteKind } from '../model.ts';
-import { prescribe } from '../prescriptions.ts';
+import { findPatterns } from '../prescriptions.ts';
 
 const WIDTH = 80;
 const LIST_LIMIT = 20;
@@ -26,15 +26,18 @@ function renderSession(session: SessionSummary): string {
   lines.push(`rent ${rentLabel(session.rent)}   score ${scoreLabel(session.rentScore)}/100`);
   lines.push('');
 
-  const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
-  if (advice.length > 0) {
-    lines.push('what to change');
-    for (const [index, item] of advice.entries()) {
-      const basis = item.basis === 'always-on' ? ' · always-on, not counted as waste' : '';
+  const findings = findPatterns({
+    claims: session.waste,
+    carriers: session.carriers,
+    rent: session.rent,
+  });
+  if (findings.length > 0) {
+    lines.push('what was observed');
+    for (const [index, item] of findings.entries()) {
       lines.push(
-        `  ${index + 1}. ${numbers.format(item.saving)} token-turns · ${item.claims} claim(s)${basis}`,
+        `  ${index + 1}. ${numbers.format(item.saving)} token-turns · ${item.claims} claim(s) · ${item.lever}`,
       );
-      lines.push(truncate(`     ${item.advice}`, WIDTH));
+      lines.push(truncate(`     ${item.label}`, WIDTH));
       lines.push(truncate(`     e.g. ${item.example}`, WIDTH));
     }
     lines.push('');

@@ -17,7 +17,7 @@ test('check fails over the threshold with exit 1 and advice', async () => {
 
   assert.equal(result.exitCode, 1);
   assert.match(result.stdout, /over by 4 points/);
-  assert.match(result.stdout, /what to change/);
+  assert.match(result.stdout, /what was observed/);
 });
 
 test('check refuses to pass when the record cannot be measured', async () => {

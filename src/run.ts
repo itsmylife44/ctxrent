@@ -3,21 +3,22 @@ import { basename, join, resolve } from 'node:path';
 import type { AuditModel, SessionSummary } from './model.ts';
 import { summariseSessions } from './model.ts';
 import { parseSession } from './adapters/index.ts';
-import { prescribe } from './prescriptions.ts';
 import type { Deps } from './deps.ts';
 import { renderText } from './report/text.ts';
 import { renderHtml } from './report/html.ts';
 import { renderDiff } from './report/diff.ts';
 import { parseTaskSet, templateTaskSet } from './taskset.ts';
 import { diffTaskSet } from './diff.ts';
+import { findPatterns } from './prescriptions.ts';
 import {
   composeBlock,
-  instructionBlock,
   mergeBlock,
   mergeRules,
   readManagedRules,
   teach,
 } from './teach.ts';
+import type { WriterRunner } from './writer.ts';
+import { buildBrief, writeRules } from './writer.ts';
 import type { TeachPlan } from './report/teach.ts';
 import { renderTeach } from './report/teach.ts';
 import { renderApplied, renderReview } from './report/review.ts';
@@ -31,6 +32,7 @@ export type Result = {
 
 const MAX_DEPTH = 8;
 const MIN_SESSIONS = 3;
+const DEFAULT_LANGUAGE = 'en';
 const RECENT_DAYS = 30;
 const DEFAULT_TASK_SET = 'ctxrent.json';
 const DEFAULT_MAX_WASTE = 40;
@@ -86,11 +88,16 @@ Usage
       --all                      walk the path recursively
       --since <date>             only sessions modified since then
       --json                     print the assertion as JSON
-  ctxrent teach [path]           rules with evidence, dry run by default
+  ctxrent teach [path]           findings, then your agent writes the rules from them
+      --agent <claude|codex>     let the agent write the rules
+      --brief                    print the brief and stop
+      --language <code>          language the rules are written in, default en
       --write <file>             show the change, ask, then apply the managed block
       --yes                      skip the question, for scripted use
       --min-sessions <n>         evidence threshold, default 3
-  ctxrent review [path]          the same choice in the browser, loopback only
+  ctxrent review [path]          findings, the written rules, and a page to approve them
+      --agent <claude|codex>     writer, default claude
+      --language <code>          language the rules are written in, default en
       --write <file>             target shown in the page
   ctxrent init [file]            write a task-set template (default ctxrent.json)
   ctxrent diff <task-set> --a <dir> --b <dir>
@@ -134,7 +141,14 @@ async function runLatest(deps: Deps): Promise<Result> {
   deps.notify(result.stdout);
   deps.notify('\n');
 
-  return openReview(files, deps, await deps.defaultInstructionFile(), MIN_SESSIONS);
+  return openReview(
+    files,
+    deps,
+    await deps.defaultInstructionFile(),
+    MIN_SESSIONS,
+    'claude',
+    DEFAULT_LANGUAGE,
+  );
 }
 
 /** Sessions touched recently: the rules worth writing down come from this month, not from 2024. */
@@ -237,19 +251,19 @@ async function runCheck(args: string[], deps: Deps): Promise<Result> {
   const headline = `waste ${actual}% (max ${maxWaste}%) ${passed ? 'ok' : `— over by ${actual - maxWaste} points`}`;
   if (passed) return { exitCode: 0, stdout: `${headline}\n`, stderr: '' };
 
-  const advice = prescribe({
+  const findings = findPatterns({
     claims: loaded.model.sessions.flatMap((session) => session.waste),
     carriers: loaded.model.sessions.flatMap((session) => session.carriers),
     rent: loaded.model.totals.rent,
   });
   const lines = [headline, ''];
-  if (advice.length === 0) {
-    lines.push('no rule could classify this waste');
+  if (findings.length === 0) {
+    lines.push('no pattern could classify this waste');
   } else {
-    lines.push('what to change');
-    for (const [index, item] of advice.entries()) {
-      lines.push(`  ${index + 1}. ${item.advice}`);
-      lines.push(`     would have saved ${item.saving.toLocaleString('en-US')} token-turns`);
+    lines.push('what was observed');
+    for (const [index, item] of findings.entries()) {
+      lines.push(`  ${index + 1}. ${item.label}`);
+      lines.push(`     ${item.saving.toLocaleString('en-US')} token-turns`);
     }
   }
 
@@ -329,15 +343,9 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseTeachArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { target, write, minSessions, yes } = parsed.options;
+  const { target, write, minSessions, yes, agent, language, briefOnly } = parsed.options;
 
-  const files: string[] = [];
-  if (target === undefined) {
-    for (const root of await deps.defaultRoots()) files.push(...(await walkSessions(root, deps)));
-  } else {
-    files.push(...(await walkSessions(target, deps)));
-  }
-
+  const files = target === undefined ? await allFiles(deps) : await walkSessions(target, deps);
   if (files.length === 0) return failure('ctxrent: no sessions found');
 
   const { sessions, records } = await parseFiles(files, deps);
@@ -345,9 +353,40 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
 
   const model = summariseSessions(sessions);
   const teachings = teach(sessions, { minSessions });
-  let block = instructionBlock(teachings, sessions.length);
 
+  if (teachings.length === 0) {
+    return {
+      exitCode: 0,
+      stdout: 'no pattern recurs in enough sessions to be worth writing down\n',
+      stderr: '',
+    };
+  }
+
+  const writable = teachings.filter((item) => item.lever === 'instruction');
+  const brief = buildBrief(writable, sessions.length, language);
+
+  if (briefOnly || agent === null || writable.length === 0) {
+    return {
+      exitCode: 0,
+      stdout: renderTeach({
+        teachings,
+        sessionCount: sessions.length,
+        turns: model.totals.turns,
+        block: null,
+        brief,
+        plan: null,
+        outcome: 'preview',
+      }),
+      stderr: '',
+    };
+  }
+
+  const written = await writeRules(deps, agent, writable, sessions.length, language, process.cwd());
+  if (!written.ok) return failure(`ctxrent: ${written.error}`);
+
+  let block = composeBlock(written.rules, sessions.length);
   let plan: TeachPlan | null = null;
+
   if (write !== null) {
     let existing: string | null = null;
     try {
@@ -355,52 +394,37 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
     } catch {
       existing = null;
     }
-
-    // An update composes with what is already there: dropping a rule the user approved earlier
-    // because it fell below today's threshold would be a silent loss.
-    const proposed = teachings
-      .filter((item) => item.lever === 'instruction')
-      .map((item) => ({ id: item.id, advice: item.advice }));
-    block = composeBlock(mergeRules(readManagedRules(existing), proposed), sessions.length);
-
+    block = composeBlock(mergeRules(readManagedRules(existing), written.rules), sessions.length);
     plan = { path: write, state: stateOf(existing), content: mergeBlock(existing, block) };
   }
 
-  const base = {
-    teachings,
-    sessionCount: sessions.length,
-    turns: model.totals.turns,
-    block,
-    plan,
-  };
+  const base = { teachings, sessionCount: sessions.length, turns: model.totals.turns, block, brief };
 
   if (plan === null) {
-    return { exitCode: 0, stdout: renderTeach({ ...base, outcome: 'preview' }), stderr: '' };
+    return { exitCode: 0, stdout: renderTeach({ ...base, plan: null, outcome: 'preview' }), stderr: '' };
   }
 
-  // Never edit a file the agent reads in every session without an explicit yes.
   let approved = yes;
   if (!approved) {
     if (!deps.interactive) {
       return {
         exitCode: 1,
-        stdout: renderTeach({ ...base, outcome: 'preview' }),
+        stdout: renderTeach({ ...base, plan, outcome: 'preview' }),
         stderr:
           'ctxrent: refusing to edit an instruction file without confirmation; re-run with --yes\n',
       };
     }
-    const rules = teachings.filter((item) => item.lever === 'instruction').length;
     approved = await deps.confirm(
-      `Apply ${rules} rule(s) to ${plan.path}? This changes how your agent behaves everywhere. [y/N] `,
+      `Apply ${written.rules.length} rule(s) to ${plan.path}? This changes how your agent behaves everywhere. [y/N] `,
     );
   }
 
   if (!approved) {
-    return { exitCode: 0, stdout: renderTeach({ ...base, outcome: 'declined' }), stderr: '' };
+    return { exitCode: 0, stdout: renderTeach({ ...base, plan, outcome: 'declined' }), stderr: '' };
   }
 
   await deps.writeArtifact(plan.path, plan.content);
-  return { exitCode: 0, stdout: renderTeach({ ...base, outcome: 'applied' }), stderr: '' };
+  return { exitCode: 0, stdout: renderTeach({ ...base, plan, outcome: 'applied' }), stderr: '' };
 }
 
 async function openReview(
@@ -408,6 +432,8 @@ async function openReview(
   deps: Deps,
   destination: string,
   minSessions: number,
+  runner: WriterRunner,
+  language: string,
 ): Promise<Result> {
   if (files.length === 0) return failure('ctxrent: no sessions found');
 
@@ -416,15 +442,18 @@ async function openReview(
 
   const model = summariseSessions(sessions);
   const teachings = teach(sessions, { minSessions });
-  const applicable = teachings.filter((item) => item.lever === 'instruction');
+  const writable = teachings.filter((item) => item.lever === 'instruction');
 
-  if (applicable.length === 0) {
+  if (writable.length === 0) {
     return {
       exitCode: 0,
       stdout: 'nothing recurs in enough sessions to be worth writing down\n',
       stderr: '',
     };
   }
+
+  const written = await writeRules(deps, runner, writable, sessions.length, language, process.cwd());
+  if (!written.ok) return failure(`ctxrent: ${written.error}`);
 
   let before: string | null = null;
   try {
@@ -440,11 +469,12 @@ async function openReview(
       renderReview({
         token,
         model,
-        teachings,
         target: destination,
         existingRules: readManagedRules(before),
+        rules: written.rules,
+        configuration: teachings.filter((item) => item.lever === 'configuration'),
       }),
-    onApply: async (rules, keep, requestedTarget) => {
+    onApply: async (ids, keep, requestedTarget) => {
       let current: string | null = null;
       try {
         current = await deps.readText(requestedTarget);
@@ -452,16 +482,13 @@ async function openReview(
         current = null;
       }
 
-      const selected = teachings
-        .filter((item) => item.lever === 'instruction' && rules.includes(item.id))
-        .map((item) => ({ id: item.id, advice: item.advice }));
-
-      // What was already in the file stays, with whatever wording it has, unless unticked.
+      const selected = written.rules.filter((item) => item.id !== null && ids.includes(item.id));
       const existing = readManagedRules(current).filter((rule) => keep.includes(rule.advice));
       const block = composeBlock(mergeRules(existing, selected), sessions.length);
+
       await deps.writeArtifact(requestedTarget, mergeBlock(current, block));
       state.applied = { target: requestedTarget, rules: selected.length };
-      return renderApplied({ rules, target: requestedTarget, block });
+      return renderApplied({ rules: ids, target: requestedTarget, block });
     },
   });
 
@@ -487,32 +514,34 @@ async function runReview(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseReviewArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { target, file, minSessions } = parsed.options;
+  const { target, file, minSessions, agent, language } = parsed.options;
 
-  const files: string[] = [];
-  if (target === undefined) {
-    for (const root of await deps.defaultRoots()) files.push(...(await walkSessions(root, deps)));
-  } else {
-    files.push(...(await walkSessions(target, deps)));
-  }
-  if (files.length === 0) return failure('ctxrent: no sessions found');
-
-  const { sessions, records } = await parseFiles(files, deps);
-  if (records === 0) return failure('ctxrent: no readable sessions');
-
+  const files = target === undefined ? await allFiles(deps) : await walkSessions(target, deps);
   const destination = file ?? (await deps.defaultInstructionFile());
-  return openReview(files, deps, destination, minSessions);
+
+  return openReview(files, deps, destination, minSessions, agent, language);
 }
 
 function parseReviewArgs(
   args: string[],
 ):
-  | { ok: true; options: { target: string | undefined; file: string | null; minSessions: number } }
+  | {
+      ok: true;
+      options: {
+        target: string | undefined;
+        file: string | null;
+        minSessions: number;
+        agent: WriterRunner;
+        language: string;
+      };
+    }
   | { ok: false; error: string } {
   const options = {
     target: undefined as string | undefined,
     file: null as string | null,
     minSessions: 3,
+    agent: 'claude' as WriterRunner,
+    language: DEFAULT_LANGUAGE,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -522,6 +551,105 @@ function parseReviewArgs(
       const value = args[index + 1];
       if (value === undefined) return { ok: false, error: 'ctxrent: --write needs a file path' };
       options.file = value;
+      index += 1;
+      continue;
+    }
+    if (argument === '--agent') {
+      const value = args[index + 1];
+      if (value !== 'claude' && value !== 'codex') {
+        return { ok: false, error: 'ctxrent: --agent must be claude or codex' };
+      }
+      options.agent = value;
+      index += 1;
+      continue;
+    }
+    if (argument === '--language') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --language needs a value' };
+      options.language = value;
+      index += 1;
+      continue;
+    }
+    if (argument === '--min-sessions') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --min-sessions needs a number' };
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        return { ok: false, error: 'ctxrent: --min-sessions must be a positive integer' };
+      }
+      options.minSessions = parsed;
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith('-')) {
+      return { ok: false, error: `ctxrent: unknown option "${argument}"` };
+    }
+    if (options.target !== undefined) {
+      return { ok: false, error: `ctxrent: unexpected argument "${argument}"` };
+    }
+    options.target = argument;
+  }
+
+  return { ok: true, options };
+}
+
+function parseTeachArgs(
+  args: string[],
+):
+  | {
+      ok: true;
+      options: {
+        target: string | undefined;
+        write: string | null;
+        minSessions: number;
+        yes: boolean;
+        agent: WriterRunner | null;
+        language: string;
+        briefOnly: boolean;
+      };
+    }
+  | { ok: false; error: string } {
+  const options = {
+    target: undefined as string | undefined,
+    write: null as string | null,
+    minSessions: 3,
+    yes: false,
+    agent: null as WriterRunner | null,
+    language: DEFAULT_LANGUAGE,
+    briefOnly: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] as string;
+
+    if (argument === '--yes' || argument === '-y') {
+      options.yes = true;
+      continue;
+    }
+    if (argument === '--brief') {
+      options.briefOnly = true;
+      continue;
+    }
+    if (argument === '--write') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --write needs a file path' };
+      options.write = value;
+      index += 1;
+      continue;
+    }
+    if (argument === '--agent') {
+      const value = args[index + 1];
+      if (value !== 'claude' && value !== 'codex') {
+        return { ok: false, error: 'ctxrent: --agent must be claude or codex' };
+      }
+      options.agent = value;
+      index += 1;
+      continue;
+    }
+    if (argument === '--language') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --language needs a value' };
+      options.language = value;
       index += 1;
       continue;
     }
@@ -553,54 +681,6 @@ function stateOf(existing: string | null): TeachPlan['state'] {
   return existing.includes('<!-- ctxrent:begin -->')
     ? 'replaces its managed block'
     : 'appends a block';
-}
-
-function parseTeachArgs(
-  args: string[],
-): { ok: true; options: { target: string | undefined; write: string | null; minSessions: number; yes: boolean } } | { ok: false; error: string } {
-  const options = {
-    target: undefined as string | undefined,
-    write: null as string | null,
-    minSessions: 3,
-    yes: false,
-  };
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index] as string;
-
-    if (argument === '--yes' || argument === '-y') {
-      options.yes = true;
-      continue;
-    }
-
-    if (argument === '--write') {
-      const value = args[index + 1];
-      if (value === undefined) return { ok: false, error: 'ctxrent: --write needs a file path' };
-      options.write = value;
-      index += 1;
-      continue;
-    }
-    if (argument === '--min-sessions') {
-      const value = args[index + 1];
-      if (value === undefined) return { ok: false, error: 'ctxrent: --min-sessions needs a number' };
-      const parsed = Number(value);
-      if (!Number.isInteger(parsed) || parsed < 1) {
-        return { ok: false, error: 'ctxrent: --min-sessions must be a positive integer' };
-      }
-      options.minSessions = parsed;
-      index += 1;
-      continue;
-    }
-    if (argument.startsWith('-')) {
-      return { ok: false, error: `ctxrent: unknown option "${argument}"` };
-    }
-    if (options.target !== undefined) {
-      return { ok: false, error: `ctxrent: unexpected argument "${argument}"` };
-    }
-    options.target = argument;
-  }
-
-  return { ok: true, options };
 }
 
 async function runInit(args: string[], deps: Deps): Promise<Result> {

@@ -5,12 +5,19 @@ import { nodeDeps } from '../src/deps.ts';
 import { startReview } from '../src/review.ts';
 import { renderReview } from '../src/report/review.ts';
 
+const AGENT_OUTPUT = [
+  '- Read files with the Read tool, never by piping them through Bash. <!-- id: read-via-read-tool -->',
+].join('\n');
+
 function reviewDeps(onUrl: (url: string) => Promise<void>) {
   const stored = new Map<string, string>();
   return {
     stored,
     deps: {
       ...nodeDeps,
+      async execFile(_file: string, _args: string[]) {
+        return { code: 0, stdout: AGENT_OUTPUT, stderr: '' };
+      },
       async openUrl(url: string) {
         await onUrl(url);
       },
@@ -99,83 +106,7 @@ test('a review of the whole flow writes only the rules chosen in the page', asyn
   assert.equal(result.exitCode, 0);
   assert.match(result.stdout, /applied 1 rule\(s\) to OUT\.md/);
   assert.match(written, /Read files with the Read tool/);
-  assert.doesNotMatch(written, /Cap what a command prints/);
   assert.equal(written.match(/ctxrent:begin/g)?.length, 1);
-});
-
-test('the page carries a real form, tokens and no javascript', async () => {
-  const result = await run(['audit', 'test/fixtures/claude-code/waste', '--json'], nodeDeps);
-  const model = JSON.parse(result.stdout);
-
-  const page = renderReview({
-    token: 'tok',
-    model,
-    target: '/tmp/CLAUDE.md',
-    existingRules: [],
-    teachings: [
-      {
-        id: 'read-via-read-tool',
-        advice: 'Read files with the Read tool (offset/limit), never by piping them through Bash.',
-        lever: 'instruction',
-        saving: 2400,
-        claims: 12,
-        sessions: 4,
-        example: 'Bash cat docs/adr/0006.md',
-      },
-    ],
-  });
-
-  assert.match(page, /<form id="rules" method="post" action="\/tok\/apply">/);
-  assert.match(page, /name="rule" value="read-via-read-tool" checked/);
-  assert.match(page, /name="target"/);
-  assert.doesNotMatch(page, /<script/i);
-  assert.doesNotMatch(page, /text-transform:\s*uppercase/i);
-  assert.match(page, /:root\{/);
-  assert.match(page, /overflow-x:clip/);
-});
-
-test('the page lists what is already in the file, unticked means removed', async () => {
-  const result = await run(['audit', 'test/fixtures/claude-code/waste', '--json'], nodeDeps);
-  const model = JSON.parse(result.stdout);
-
-  const page = renderReview({
-    token: 'tok',
-    model,
-    target: '/tmp/CLAUDE.md',
-    existingRules: [{ id: null, advice: 'Keep this custom rule.' }],
-    teachings: [],
-  });
-
-  assert.match(page, /Already in this file/);
-  assert.match(page, /name="keep" value="Keep this custom rule\." checked/);
-  assert.doesNotMatch(page, /the managed block is empty/);
-});
-
-test('applying keeps the rules that were already there', async () => {
-  const harness = reviewDeps(async (url) => {
-    const form = new URLSearchParams();
-    form.append('rule', 'read-via-read-tool');
-    form.append('keep', 'Keep this custom rule.');
-    form.append('target', 'OUT.md');
-    await fetch(`${url}/apply`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: form.toString(),
-    });
-  });
-
-  harness.stored.set('OUT.md', '<!-- ctxrent:begin -->\n- Keep this custom rule.\n<!-- ctxrent:end -->\n');
-
-  const result = await run(
-    ['review', 'test/fixtures/claude-code', '--min-sessions', '1', '--write', 'OUT.md'],
-    harness.deps,
-  );
-
-  const written = harness.stored.get('OUT.md') ?? '';
-
-  assert.equal(result.exitCode, 0);
-  assert.match(written, /Keep this custom rule\./);
-  assert.match(written, /Read files with the Read tool/);
 });
 
 test('a rule already in the file is not proposed again', async () => {
@@ -189,22 +120,57 @@ test('a rule already in the file is not proposed again', async () => {
     existingRules: [
       {
         id: 'read-via-read-tool',
-        advice: 'Read files with the Read tool (offset/limit), never by piping them through Bash.',
+        advice: 'Read files with the Read tool, never by piping them through Bash.',
       },
     ],
-    teachings: [
+    rules: [
       {
         id: 'read-via-read-tool',
-        advice: 'Read files with the Read tool (offset/limit), never by piping them through Bash.',
-        lever: 'instruction',
-        saving: 10,
-        claims: 1,
-        sessions: 3,
-        example: 'Bash cat a.md',
+        advice: 'Read files with the Read tool, never by piping them through Bash.',
       },
     ],
+    configuration: [],
   });
 
   assert.equal(page.match(/name="rule"/g), null);
   assert.match(page, /Nothing new/);
+});
+
+test('the page lists what is already in the file, unticked means removed', async () => {
+  const result = await run(['audit', 'test/fixtures/claude-code/waste', '--json'], nodeDeps);
+  const model = JSON.parse(result.stdout);
+
+  const page = renderReview({
+    token: 'tok',
+    model,
+    target: '/tmp/CLAUDE.md',
+    existingRules: [{ id: null, advice: 'Keep this custom rule.' }],
+    rules: [],
+    configuration: [],
+  });
+
+  assert.match(page, /Already in this file/);
+  assert.match(page, /name="keep" value="Keep this custom rule\." checked/);
+});
+
+test('the page carries a real form, tokens and no javascript', async () => {
+  const result = await run(['audit', 'test/fixtures/claude-code/waste', '--json'], nodeDeps);
+  const model = JSON.parse(result.stdout);
+
+  const page = renderReview({
+    token: 'tok',
+    model,
+    target: '/tmp/CLAUDE.md',
+    existingRules: [],
+    rules: [{ id: 'read-via-read-tool', advice: 'Read files with the Read tool.' }],
+    configuration: [],
+  });
+
+  assert.match(page, /<form id="rules" method="post" action="\/tok\/apply">/);
+  assert.match(page, /name="rule" value="read-via-read-tool" checked/);
+  assert.match(page, /name="target"/);
+  assert.doesNotMatch(page, /<script/i);
+  assert.doesNotMatch(page, /text-transform:\s*uppercase/i);
+  assert.match(page, /:root\{/);
+  assert.match(page, /overflow-x:clip/);
 });

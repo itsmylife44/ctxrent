@@ -7,18 +7,18 @@ const numbers = new Intl.NumberFormat('en-US');
 export type ReviewPage = {
   token: string;
   model: AuditModel;
-  teachings: Teaching[];
   target: string;
   existingRules: ManagedRule[];
+  /** Rules this run's agent wrote from the evidence, not written by the tool. */
+  rules: ManagedRule[];
+  configuration: Teaching[];
 };
 
 export function renderReview(input: ReviewPage): string {
-  const { model, teachings, target, token, existingRules } = input;
+  const { model, target, token, existingRules, rules, configuration } = input;
   const alreadyThere = new Set(existingRules.map((rule) => rule.advice));
-  const instructions = teachings.filter(
-    (item) => item.lever === 'instruction' && !alreadyThere.has(item.advice),
-  );
-  const configured = teachings.filter((item) => item.lever === 'configuration');
+  const fresh = rules.filter((rule) => !alreadyThere.has(rule.advice));
+
   const top = model.sessions
     .flatMap((session) => session.carriers)
     .sort((a, b) => b.rent - a.rent)[0];
@@ -58,13 +58,21 @@ ${existingRules
 </div>`
 }
 
-<h2>New rules from this run</h2>
+<h2>Written from this run</h2>
 ${
-  instructions.length === 0
-    ? '<p class="note">Nothing new: today\'s sessions add no rule that is not already in the file.</p>'
-    : `<p class="note">Each rule recurs across your sessions. Untick anything you do not want.</p>
+  fresh.length === 0
+    ? '<p class="note">Nothing new: this run adds no rule that is not already in the file.</p>'
+    : `<p class="note">Written by your agent from the evidence. Untick anything you do not want.</p>
 <div class="rules">
-${instructions.map((item) => rule(item)).join('\n')}
+${fresh
+  .map(
+    (item) => `<label class="rule">
+  <input type="checkbox" name="rule" value="${escape(item.id ?? '')}" checked>
+  <span><span class="rule-title">${escape(item.advice)}</span></span>
+  <span></span>
+</label>`,
+  )
+  .join('\n')}
 </div>`
 }
 
@@ -75,18 +83,18 @@ ${instructions.map((item) => rule(item)).join('\n')}
 </form>
 
 ${
-  configured.length === 0
+  configuration.length === 0
     ? ''
     : `<h2>Not fixable by an instruction</h2>
 <p class="note">These are configuration. Writing them into an instruction file would do nothing.</p>
 <div class="rules">
-${configured
+${configuration
   .map(
     (item) => `<div class="rule">
   <span></span>
   <span>
-    <span class="rule-title">${escape(item.advice)}</span>
-    <span class="rule-meta">${numbers.format(item.claims)} claims in ${item.sessions} sessions</span>
+    <span class="rule-title">${escape(item.label)}</span>
+    <span class="rule-meta">${numbers.format(item.claims)} claims in ${item.sessions} sessions, ${numbers.format(item.saving)} token-turns</span>
   </span>
   <span class="saving">${numbers.format(item.saving)}</span>
 </div>`,
@@ -108,21 +116,9 @@ ${topCarriers(model, rent)}
   return document({
     title: 'ctxrent review',
     description:
-      'Choose which context-hygiene rules to write into your agent instruction file, with the evidence behind each one.',
+      'Rules written by your agent from measured evidence: tick what you keep, then apply.',
     body,
   });
-}
-
-function rule(item: Teaching): string {
-  return `<label class="rule">
-  <input type="checkbox" name="rule" value="${escape(item.id)}" checked>
-  <span>
-    <span class="rule-title">${escape(item.advice)}</span>
-    <span class="rule-meta">${numbers.format(item.claims)} claims in ${item.sessions} sessions, ${numbers.format(item.saving)} token-turns</span>
-    <span class="rule-eg">e.g. ${escape(short(item.example, 90))}</span>
-  </span>
-  <span class="saving">${numbers.format(item.saving)}</span>
-</label>`;
 }
 
 function topCarriers(model: AuditModel, rent: number): string {
