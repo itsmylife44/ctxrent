@@ -82,6 +82,8 @@ export type Deps = {
   openUrl(url: string): Promise<void>;
   /** Writes immediately, for progress that must appear before a long wait. */
   notify(message: string): void;
+  /** Today as YYYY-MM-DD, stamped on the managed block so later runs can measure only what came after. */
+  today(): string;
 };
 
 function collect(
@@ -187,6 +189,9 @@ export const nodeDeps: Deps = {
       child.on('error', () => resolve(false));
       child.on('close', (code: number | null) => resolve(code === 0));
     });
+  },
+  today() {
+    return new Date().toISOString().slice(0, 10);
   },
   async confirm(question) {
     const reader = createInterface({ input: process.stdin, output: process.stdout });

@@ -82,13 +82,13 @@ const LEGACY_IDS = new Map<string, string>([
   ['Move fixed context into a file the agent reads on demand, not an always-on attachment.', 'attachment-bloat'],
 ]);
 
-export function composeBlock(rules: ManagedRule[], sessionCount: number): string {
+export function composeBlock(rules: ManagedRule[], sessionCount: number, date: string): string {
   const lines = [
     '<!-- ctxrent:begin -->',
     '## Context hygiene',
     '',
-    `Measured by ctxrent on ${sessionCount.toLocaleString('en-US')} sessions. Each line was written`,
-    'from that evidence; re-run `ctxrent teach` to review and update this block.',
+    `Measured by ctxrent on ${sessionCount.toLocaleString('en-US')} sessions, applied ${date}. Each line`,
+    'was written from that evidence; run /ctxrent or `ctxrent review` to update this block.',
     '',
   ];
 

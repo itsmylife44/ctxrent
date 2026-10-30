@@ -488,7 +488,7 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
   const written = await writeRules(deps, agent, writable, sessions.length, language, process.cwd());
   if (!written.ok) return failure(`ctxrent: ${written.error}`);
 
-  let block = composeBlock(written.rules, sessions.length);
+  let block = composeBlock(written.rules, sessions.length, deps.today());
   let plan: TeachPlan | null = null;
 
   if (write !== null) {
@@ -498,7 +498,7 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
     } catch {
       existing = null;
     }
-    block = composeBlock(mergeRules(readManagedRules(existing), written.rules), sessions.length);
+    block = composeBlock(mergeRules(readManagedRules(existing), written.rules), sessions.length, deps.today());
     plan = { path: write, state: stateOf(existing), content: mergeBlock(existing, block) };
   }
 
@@ -620,7 +620,7 @@ async function openReview(
       const existing = readManagedRules(current).filter(
         (rule) => keep.includes(rule.advice) && !replaced.has(rule.id),
       );
-      const block = composeBlock(mergeRules(existing, selected), sessions.length);
+      const block = composeBlock(mergeRules(existing, selected), sessions.length, deps.today());
 
       await deps.writeArtifact(requestedTarget, mergeBlock(current, block));
       state.applied = { target: requestedTarget, rules: selected.length };

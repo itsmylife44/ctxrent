@@ -46,7 +46,12 @@ Each finding has `id`, `label` (what was observed, as data), `lever`, `saving` (
 If `findings` is empty, run `ctxrent` alone, show the user the last session's rent, score and top
 carriers, and stop: there is nothing recurring to write a rule for.
 
-Done when you hold the JSON.
+If the target (see step 4) has a managed block that says `applied <date>`, judge the rules already
+there: run `ctxrent check --all --since <date> --max-waste 100 --json` and the same without
+`--since`, and tell the user the waste share (`actual`) since the rules against all sessions. Exit 2
+with `--since` means no session since then: say it is too early to tell.
+
+Done when you hold the JSON, and the comparison when the block has a date.
 
 ## 3. Write the rules
 

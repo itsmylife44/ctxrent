@@ -97,7 +97,7 @@ test('the agent output is validated: unknown ids and prose are dropped', async (
 });
 
 test('the block keeps the id marker so a rewrite can be recognised', () => {
-  const block = composeBlock([{ id: 'read-via-read-tool', advice: 'Leggi con Read.' }], 10);
+  const block = composeBlock([{ id: 'read-via-read-tool', advice: 'Leggi con Read.' }], 10, '2026-10-30');
 
   assert.match(block, /- Leggi con Read\. <!-- id: read-via-read-tool -->/);
 });
@@ -193,4 +193,10 @@ test('an old block without ids does not collect a second copy of each rule', () 
   assert.deepEqual(readManagedRules(duplicated), [
     { id: 'read-via-read-tool', advice: 'Read files with the Read tool, never through cat in Bash.' },
   ]);
+});
+
+test('the managed block says when it was applied, so later runs can measure only what came after', () => {
+  const block = composeBlock([{ id: 'read-via-read-tool', advice: 'Leggi con Read.' }], 1314, '2026-10-30');
+
+  assert.match(block, /Measured by ctxrent on 1,314 sessions, applied 2026-10-30\./);
 });
