@@ -78,17 +78,13 @@ jobs:
         with:
           name: tarball
 
-      - name: the npm token is set
-        run: |
-          if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::error::NPM_TOKEN is not set: the skill runs ctxrent@latest from npm, so a release without it ships nothing."
-            exit 1
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      # The same bytes as the release asset: publishing the tarball skips prepack and a rebuild.
+      # Trusted publishing: npm trusts this workflow through OIDC, so there is no token to leak or renew.
+      # A version already on npm (the first one is published by hand) is not published twice.
       - name: publish to npm
-        run: npm publish ./ctxrent-*.tgz --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if npm view "ctxrent@${version}" version >/dev/null 2>&1; then
+            echo "ctxrent@${version} is already on npm"
+          else
+            npm publish ./ctxrent-*.tgz --provenance --access public
+          fi

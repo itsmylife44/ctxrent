@@ -303,7 +303,7 @@ git push --follow-tags
 
 The skill runs `npx -y ctxrent@latest`, so a release reaches every `/ctxrent` without anyone updating the skill: for a tag, `npx` asks the registry for the newest version on every run. That is why the CLI ships through npm and not as a release URL, which `npx` would reuse from its cache forever. `npm version` keeps the skill's `metadata.version` in step (`scripts/version.js`).
 
-The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, attaches the packed tarball to a GitHub release, and publishes the same tarball to npm with provenance. Publishing needs an `NPM_TOKEN` repository secret (an npm automation token); without it the job fails, because npm is what the skill runs.
+The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, attaches the packed tarball to a GitHub release, and publishes the same tarball to npm with provenance. npm trusts the workflow through [trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so there is no token to store or renew; a version already on npm is skipped.
 
 ## Design
 
