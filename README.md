@@ -264,7 +264,8 @@ src/adapters/   claude-code, codex, shared content recovery, detection
 src/epochs.ts   where a context compaction ends the rent
 src/rent.ts     token-turns per carrier
 src/waste.ts    the four classes
-src/prescriptions.ts, src/teach.ts   advice, evidence, managed block
+src/prescriptions.ts, src/teach.ts   findings, evidence, aggregation
+src/writer.ts   the brief handed to the agent, and validation of what it writes
 src/report/     text, html, review page, diff output
 src/review.ts   the loopback review server
 src/run.ts      the command surface
@@ -274,7 +275,7 @@ src/run.ts      the command surface
 
 ```bash
 npm install          # dev dependencies only: typescript, @types/node
-npm test             # 115 tests, runs the TypeScript source, Node 22.18+
+npm test             # 118 tests, runs the TypeScript source, Node 22.18+
 npm run typecheck
 ```
 
