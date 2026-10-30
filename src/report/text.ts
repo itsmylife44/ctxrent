@@ -28,7 +28,6 @@ function renderSession(session: SessionSummary): string {
 
   const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
   if (advice.length > 0) {
-    lines.push('');
     lines.push('what to change');
     for (const [index, item] of advice.entries()) {
       lines.push(

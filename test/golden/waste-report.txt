@@ -3,7 +3,6 @@ session fixture-waste
 
 rent 5,850 token-turns   score 56/100
 
-
 what to change
   1. 1,800 token-turns · 1 claim(s)
      Cap what a command prints: pipe it through head, or write it to a file and…

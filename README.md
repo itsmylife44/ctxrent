@@ -1,98 +1,136 @@
 # ctxrent
 
-Your coding agent pays rent on every token it keeps in context. `ctxrent` measures that rent, shows where it goes, and tells you which of it was waste.
+Your coding agent pays rent on every token it keeps in context. `ctxrent` measures that rent, shows what caused it, and turns the worst habits into rules your agent reads before it starts.
 
-Local-only. No network, no telemetry, no runtime dependencies. It reads the session records your agent already writes and never sends them anywhere.
+It runs on your machine. No outbound network, no telemetry, no runtime dependencies, no install step.
 
 ## The idea
 
-A file read at turn 2 of a 200-turn session is re-sent to the model on turn 3, 4, 5… until the context is compacted. It does not cost its size; it costs `size x turns survived`. That is **context rent**, measured in **token-turns**. It is why an early mistake is expensive and a late one is not, and no token counter shows it.
+A file you read at turn 2 of a 200-turn session is sent to the model again on turn 3, turn 4, and so on until the context is compacted. It does not cost its size. It costs its size multiplied by the turns it survived:
 
-## Usage
+```
+rent = size x turns survived        measured in token-turns
+```
+
+That single equation explains why an early mistake costs many times a late one, why a 30k-token attachment is worse than a 30k-token file you open once, and why "you used 52M tokens" is a number you cannot act on. No token counter shows it.
+
+## Quick start
 
 ```bash
-npx ctxrent                                    # the session you just finished
-npx ctxrent audit ~/.claude/projects/-Users-you-code-my-app
-npx ctxrent audit <session.jsonl> --json
-npx ctxrent audit <session.jsonl> --html report.html
-npx ctxrent audit ~/.claude/projects --all
-npx ctxrent check --max-waste 40               # gate: 0 ok, 1 over, 2 cannot measure
-npx ctxrent teach                              # what to write down, from every session
-npx ctxrent teach --write ~/.claude/CLAUDE.md  # preview, then ask before writing
-npx ctxrent review                             # tick rules in the browser, apply there
+git clone https://github.com/<you>/ctxrent
+cd ctxrent
+./src/cli.ts              # audits the session you just finished
 ```
 
-Supported records: Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`). The adapter is detected from the file itself.
+No install, no build, no dependency. The TypeScript source runs directly on Node 22.18 or newer. To put it on your PATH:
+
+```bash
+ln -s "$PWD/src/cli.ts" /usr/local/bin/ctxrent
+ctxrent --help
+```
+
+## What it looks like
+
+Real output from the test fixture in `test/fixtures/`, with some lines trimmed for length:
 
 ```
-session be2743a9-…
-232 turns · 52,794,243 tokens spent · 45% of context accounted for
+session fixture-waste
+7 turns · 28,070 tokens spent · 23% of context accounted for
 
-rent 12,653,567 token-turns   score 56/100
+rent 5,850 token-turns   score 56/100
+
+what to change
+  1. 1,800 token-turns · 1 claim(s)
+     Cap what a command prints: pipe it through head, or write it to a file and…
+     e.g. Grep x
+  2. 500 token-turns · 1 claim(s)
+     Read a file after editing it, or read only the section you are about to ch…
+     e.g. Read src/x.ts
 
 top carriers
-  attachment                        8,069,611 rent   51,617 tok 346×
-  Bash                              2,570,530 rent   30,060 tok 106×
+  Grep x                              2,400 rent     600 tok        t4–4
+  Bash ls                             2,100 rent     800 tok     t5–6 ×2
+  user                                  700 rent     100 tok        t1–1
 
-waste 8,977,870 token-turns (45% of rent)
-  retry-loop         8,515,980   427 claim(s)
+waste 2,600 token-turns (44% of rent)
+  superseded-read          500   1 claim(s)
+  dead-payload           1,800   1 claim(s)
+  retry-loop               300   1 claim(s)
 ```
+
+`--html report.html` writes the same thing as one self-contained file: light and dark, no external references, no scripting.
+
+## What it finds
+
+| Class | Rule | The habit it catches |
+| --- | --- | --- |
+| `superseded-read` | A file read, then rewritten later in the session | Reading a file you were about to edit |
+| `dead-payload` | A tool result over 500 tokens from a carrier never used again, with at least two turns left | Build logs and dumps that sit in context forever |
+| `retry-loop` | The same carrier injected again within two turns | Failed calls and correction cycles |
+| `duplicate-context` | The same attachment text injected again in one context epoch | Context that is already there, paid twice |
+
+A claim always names the carrier and the turns that justify it. A class that cannot be decided from the record produces no claim, and a session with nothing measurable reports rent and waste as unavailable rather than zero.
 
 ## What to change
 
-Every report ends with the two or three changes that would have saved the most, each with an amount and a line you can paste into `AGENTS.md`:
+Every report ends with the two or three changes that would have saved the most. Each carries an amount and a line you can paste into `AGENTS.md`, because you cannot stop an agent from running `cat` — you can only steer it.
+
+## Teach the agent
+
+`ctxrent teach` aggregates every session into rules with evidence and keeps only the ones that recur. A rule that appeared once is an afternoon, not a habit.
 
 ```
-what to change
-  1. 1,125,365 token-turns · 34 claim(s)
-     Move fixed context into a file the agent reads on demand, not an always-on…
-     e.g. attachment · 38,546 tokens × 34
-  2. 180,209 token-turns · 4 claim(s)
-     Cap what a command prints: pipe it through head, or write it to a file and…
-```
+4,029 sessions · 163,968 turns analysed · 10 rules with evidence
 
-Advice is written as an instruction because you cannot stop an agent from running `cat` — you can only steer it. Then measure the effect with `ctxrent diff`.
-
-## What counts as waste
-
-| Class | Rule | What it catches |
-| --- | --- | --- |
-| `superseded-read` | A file read, then rewritten later in the session | Reading a file you were about to edit |
-| `dead-payload` | A tool result over 500 tokens from a carrier never used again, with at least 2 turns left | Build logs and dumps that sit in context forever |
-| `retry-loop` | The same carrier injected again within 2 turns | Failed calls and correction cycles |
-| `duplicate-context` | The same attachment text injected again in one context epoch | Context that is already there, paid twice |
-
-Every claim names the carrier and the turns that justify it. Rules that cannot be decided from the record are reported as unavailable, never as zero.
-
-## Teaching the agent, not just reporting
-
-`ctxrent teach` aggregates every session into rules with evidence, then writes only the ones that recurred. A rule that appeared once is an afternoon, not a habit.
-
-```
+rules
   attachment-bloat      configuration  3,533 claims ·  3533 sessions · 3,138,375,885 token-turns
   read-via-read-tool    instruction   10,897 claims ·  2300 sessions · 1,093,155,287 token-turns
+  cap-command-output    instruction   14,654 claims ·  2470 sessions · 1,077,805,681 token-turns
 ```
 
-It writes a **managed block**, delimited by `<!-- ctxrent:begin -->`, so re-running it replaces its own rules and leaves your text alone.
+It separates two levers, because conflating them produces advice that cannot work:
 
-`ctxrent review` does the same thing in the browser: it opens a page served only on loopback, shows each rule with its evidence and the command that caused it, and lets you untick what you do not want. The page is a plain form, so it works with scripting off, and the target file is editable there. Applying from the page is the only thing that writes.
+- **instruction** — the agent can choose differently, so a line in `CLAUDE.md` / `AGENTS.md` changes the behaviour.
+- **configuration** — the record is dominated by something the agent does not control, such as an always-on attachment from a hook. Telling the agent about it does nothing; the fix is to turn the hook off.
 
-Nothing is ever written without consent. `teach` is a dry run by default; with `--write` it prints the target, what will change, the full block, how the change will be verified and how to undo it, and then asks. Without a terminal to answer — a script, CI, a pipe — it refuses and exits non-zero unless `--yes` is passed. That flag is the explicit statement that you chose this.
-
-The output separates two levers, because conflating them produces advice that cannot work:
-
-- **instruction** — a line for `CLAUDE.md` / `AGENTS.md`, because the agent can choose differently.
-- **configuration** — the record is dominated by something the agent does not control, such as an always-on attachment from a hook. Telling the agent about it does nothing; the fix is to turn the hook off or trim the skill listing.
-
-Then close the loop: apply the block, keep working, and run `ctxrent check` again. If waste does not fall, remove the rule — otherwise you have made a guess global.
-
-## Comparing variants
-
-`ctxrent diff` runs two variants over the same declared task set and reports the delta in rent and in success rate, so a change to a skill or an instruction file is measured rather than felt. Aggregate reports list the highest-rent sessions and state how many were omitted: the top 20 in the terminal, the top 100 in the HTML.
+### Nothing is written without consent
 
 ```bash
-npx ctxrent init            # writes ctxrent.json
-npx ctxrent diff ctxrent.json --a before/ --b after/
+ctxrent teach                                  # dry run: prints the block, writes nothing
+ctxrent teach --write ~/.claude/CLAUDE.md      # prints the target, the change, how to undo it, then asks
+```
+
+Without a terminal to answer, or if you say no, nothing happens and it exits non-zero, so a pipeline cannot mistake a refusal for success. `--yes` is the explicit statement that you chose — it exists for scripted use only.
+
+The block is delimited by `<!-- ctxrent:begin -->` and `<!-- ctxrent:end -->`, so re-running replaces only its own rules and leaves your own text alone. To undo, delete what is between the markers.
+
+### Or decide in the browser
+
+```bash
+ctxrent review
+```
+
+Opens a page served only on `127.0.0.1`, with a real form: each rule is a checkbox showing its evidence and the command that caused it, the target file is editable, and applying there writes the block. No JavaScript — the page works with scripting off. The server requires a single-use token in the path, answers one `POST`, and closes; it also closes by itself after ten minutes.
+
+## Put a gate on it
+
+```bash
+ctxrent check --max-waste 40                    # the latest session
+ctxrent check ~/.claude/projects --all           # the whole archive
+```
+
+Exit `0` under the threshold, `1` over it (printing the rules that would have helped), `2` when the record cannot be measured. Missing data never passes silently. This is the shape `eslint --max-warnings` and Lighthouse CI use, so it drops into a nightly job or a hook without a new vocabulary:
+
+```bash
+# every night, on the machine where the work happens
+0 3 * * * ctxrent check ~/.claude/projects --all --max-waste 40 >> ~/.ctxrent/nightly.log
+```
+
+## Compare two variants
+
+```bash
+ctxrent init                                  # writes ctxrent.json
+ctxrent diff ctxrent.json --a before/ --b after/
 ```
 
 ```json
@@ -103,28 +141,54 @@ npx ctxrent diff ctxrent.json --a before/ --b after/
 }
 ```
 
-The verifier's exit code is the only judge of success. Each run happens in a fresh copy of the variant directory and is cleaned up afterwards. **The verifier is a shell command from your own task set and runs with your permissions** — it is not sandboxed.
+Both variants run over the same tasks, each run in a fresh copy of its directory, and the report gives the delta in rent and in success rate, labelling each task `regressed`, `improved` or `fails in both`. The verifier's exit code is the only judge.
 
-## Honesty about the numbers
+**The verifier is a shell command from your own task set and runs with your permissions.** It is not sandboxed.
 
-- **Token-turns are a volume unit, not a money unit.** A re-read token is billed at 0.1× the base input rate and a cache write at 1.25×–2× (Anthropic and OpenAI prompt-caching docs), so rent tells you what dominates the prompt, not what the prompt cost. `ctxrent` deliberately reports no currency.
-- Injection sizes are **estimated** at `ceil(chars / 4)` from the recovered text. The model labels them `estimated`, and content whose text cannot be recovered is `unknown`, not zero.
-- The record stores deltas: the system prompt, the tool schemas and the cached prefix are never written to disk. Their rent is reported as `residualContextTokens`, never silently attributed. Coverage is measured inside the last context epoch, so the report always states the share it can explain.
-- When the context is compacted, content the record shows as dropped stops paying rent. Without that rule a long session reports more rent than it spent in tokens. A drop of at least 500 tokens and 5% counts as a compaction; smaller dips are treated as noise.
-- Rules never guess: a class that cannot be decided from the record produces no claim. A session with nothing measurable reports rent and waste as unavailable rather than zero, and a record that names nothing a rule can judge — Codex tool outputs carry only a bare tool name — reports waste and score as unavailable rather than a perfect 100.
+## What it reads
+
+Claude Code (`~/.claude/projects/*.jsonl`) and Codex (`~/.codex/sessions/**/*.jsonl`). The adapter is detected from the file itself, and coverage is reported per adapter. Session directories are opened read-only.
+
+## Privacy
+
+- No outbound network, ever. The only socket is the loopback review page, bound to `127.0.0.1` on an ephemeral port.
+- No telemetry, no account, no upload.
+- No runtime dependencies: what you clone is what runs.
+- Nothing is written unless you ask: `--html` writes the report you named, `teach --write` and `review` write the block you approved.
+
+## What the numbers can and cannot say
+
+- **Token-turns are a volume, not money.** A re-read token is billed at 0.1× the base input rate and a cache write at 1.25×–2×, per the Anthropic and OpenAI prompt-caching docs. Rent tells you what dominates the prompt, not what the prompt cost. `ctxrent` deliberately reports no currency.
+- **Sizes are estimated** at `ceil(chars / 4)` from the recovered text, and labelled `estimated`. Content whose text cannot be recovered is `unknown`, never zero.
+- **Coverage is partial by construction.** Session records store deltas; the system prompt, the tool schemas and the cached prefix are never on disk. What the reconstruction cannot account for is reported as a residual, and the report states the share it explains.
+- **Compaction ends rent.** Content the record shows as dropped stops paying from that point; a drop of at least 500 tokens and 5% counts as a compaction. Without this rule a long session reports more rent than it spent in tokens.
+- **Waste is a heuristic, not a verdict.** The rules are conservative, each claim names its evidence, and `ctxrent diff` is how you prove that removing something did not hurt.
 - Codex `input_tokens` already includes cached tokens, so its totals are not directly comparable with Claude Code's cache-split totals.
+
+## How it works
+
+Everything goes through one seam, `run(argv, deps)`, with the filesystem, the clock and the agent runner injected, so the whole tool is testable without network or subprocesses. An adapter turns a session record into turns, each turn carrying the injections that preceded it. Rent, waste and prescriptions are pure functions over those turns; the reports are pure functions over the model.
+
+```
+src/adapters/   claude-code, codex, shared content recovery, detection
+src/epochs.ts   where a context compaction ends the rent
+src/rent.ts     token-turns per carrier
+src/waste.ts    the four classes
+src/prescriptions.ts, src/teach.ts   advice, evidence, managed block
+src/review.ts   the loopback review server
+src/run.ts      the command surface
+```
 
 ## Development
 
 ```bash
-node --test test/*.test.ts      # 92 tests, loopback only, no real agents
-npx tsc --noEmit                # typecheck
+npm install          # dev dependencies only: typescript, @types/node
+npm test             # 92 tests, no outbound network, no real agents
+npm run typecheck
 ```
-
-Requires Node >= 22.18 (TypeScript source is run directly).
 
 ## Design
 
-The vocabulary lives in [`GLOSSARY.md`](./GLOSSARY.md) and the load-bearing decisions in [`docs/adr/`](./docs/adr/). Everything in the tool is reached through one seam, `run(argv, deps)`, with the filesystem and the agent runner injected.
+The vocabulary is in [`GLOSSARY.md`](./GLOSSARY.md); the decisions that are hard to reverse are in [`docs/adr/`](./docs/adr/). The research behind the prescriptions, with primary sources, is in [`docs/research/`](./docs/research/).
 
 MIT licensed.

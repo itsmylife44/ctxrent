@@ -42,6 +42,7 @@ type CheckOptions = {
   target: string | undefined;
   maxWaste: number;
   json: boolean;
+  all: boolean;
 };
 
 type Loaded = { ok: true; model: AuditModel } | { ok: false; error: string };
@@ -55,10 +56,40 @@ export async function run(argv: string[], deps: Deps): Promise<Result> {
   }
 }
 
+const USAGE = `ctxrent measures the context rent of coding-agent sessions.
+
+Usage
+  ctxrent                        audit the session you just finished
+  ctxrent audit <path>           a session file, or a directory of sessions
+      --all                      walk the path recursively
+      --json                     print the model instead of the report
+      --html <file>              write a single-file report
+  ctxrent check [path]           exit 0 under the threshold, 1 over, 2 cannot measure
+      --max-waste <pct>          threshold, default 40
+      --all                      walk the path recursively
+      --json                     print the assertion as JSON
+  ctxrent teach [path]           rules with evidence, dry run by default
+      --write <file>             show the change, ask, then apply the managed block
+      --yes                      skip the question, for scripted use
+      --min-sessions <n>         evidence threshold, default 3
+  ctxrent review [path]          the same choice in the browser, loopback only
+      --write <file>             target shown in the page
+  ctxrent init [file]            write a task-set template (default ctxrent.json)
+  ctxrent diff <task-set> --a <dir> --b <dir>
+                                 run both variants and compare rent and success
+
+Records are read from ~/.claude/projects and ~/.codex/sessions, and the adapter
+is detected from the file itself. Nothing leaves the machine.
+`;
+
 async function dispatch(argv: string[], deps: Deps): Promise<Result> {
   if (argv.length === 0) return runLatest(deps);
 
   const [command, ...rest] = argv;
+
+  if (command === '--help' || command === '-h' || command === 'help') {
+    return { exitCode: 0, stdout: USAGE, stderr: '' };
+  }
 
   if (command === 'audit') return runAudit(rest, deps);
   if (command === 'check') return runCheck(rest, deps);
@@ -105,11 +136,11 @@ async function runCheck(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseCheckArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { maxWaste, json } = parsed.options;
+  const { maxWaste, json, all } = parsed.options;
   const target = parsed.options.target ?? (await latestSessionFile(deps));
   if (target === null) return failure('ctxrent: no sessions found');
 
-  const loaded = await loadSessions(target, deps, false);
+  const loaded = await loadSessions(target, deps, all);
   if (!loaded.ok) return failure(loaded.error);
 
   const { rent, wasteRent } = loaded.model.totals;
@@ -473,13 +504,22 @@ async function runDiff(args: string[], deps: Deps): Promise<Result> {
 function parseCheckArgs(
   args: string[],
 ): { ok: true; options: CheckOptions } | { ok: false; error: string } {
-  const options: CheckOptions = { target: undefined, maxWaste: DEFAULT_MAX_WASTE, json: false };
+  const options: CheckOptions = {
+    target: undefined,
+    maxWaste: DEFAULT_MAX_WASTE,
+    json: false,
+    all: false,
+  };
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index] as string;
 
     if (argument === '--json') {
       options.json = true;
+      continue;
+    }
+    if (argument === '--all') {
+      options.all = true;
       continue;
     }
     if (argument === '--max-waste') {
