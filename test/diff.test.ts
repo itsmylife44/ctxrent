@@ -68,16 +68,12 @@ function fakeDeps(options: { agentCode?: number } = {}): Deps & { agentRuns: () 
     async which() {
       return true;
     },
+    async execFile(_file: string, _args: string[], cwd: string) {
+      agentRuns += 1;
+      return { code: options.agentCode ?? 0, stdout: stream(variantOf.get(cwd)), stderr: '' };
+    },
     async exec(command: string, cwd: string) {
       const variant = variantOf.get(cwd);
-
-      if (command.startsWith('command -v')) return { code: 0, stdout: '', stderr: '' };
-
-      if (command.startsWith('claude') || command.startsWith('codex')) {
-        agentRuns += 1;
-        return { code: options.agentCode ?? 0, stdout: stream(variant), stderr: '' };
-      }
-
       const task = command.replace('verify-', '');
       if (task === '1') return { code: 0, stdout: '', stderr: '' };
       if (task === '2') return { code: variant === A ? 0 : 1, stdout: '', stderr: '' };
@@ -126,6 +122,10 @@ test('the availability check runs before either variant starts', async () => {
     ...base,
     async which() {
       return false;
+    },
+    async execFile(file: string, args: string[], cwd: string) {
+      executed += 1;
+      return base.execFile(file, args, cwd);
     },
     async exec(command: string, cwd: string) {
       executed += 1;

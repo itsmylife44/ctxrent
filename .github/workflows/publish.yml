@@ -1,0 +1,48 @@
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+
+      - name: the tag matches package.json
+        run: |
+          node -e "
+            const version = require('./package.json').version;
+            const tag = process.env.GITHUB_REF_NAME.replace(/^v/, '');
+            if (version !== tag) {
+              console.error('tag ' + tag + ' does not match package.json version ' + version);
+              process.exit(1);
+            }
+          "
+
+      - name: repository is set, provenance needs it
+        run: |
+          node -e "
+            const p = require('./package.json');
+            const url = typeof p.repository === 'string' ? p.repository : p.repository && p.repository.url;
+            if (!url || url.includes('OWNER')) {
+              console.error('Set the repository field in package.json before publishing');
+              process.exit(1);
+            }
+          "
+
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

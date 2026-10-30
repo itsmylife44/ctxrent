@@ -159,6 +159,18 @@ Both variants run over the same tasks, each run in a fresh copy of its directory
 
 **The verifier is a shell command from your own task set and runs with your permissions.** It is not sandboxed.
 
+## Platforms
+
+| | |
+| --- | --- |
+| macOS | runs from source or as a package; shell commands through `sh`, browser through `open` |
+| Linux | same as macOS, browser through `xdg-open` |
+| Windows | package install, commands through `cmd.exe`, runner lookup through `where`, browser through `start` |
+
+CI runs the full suite on Ubuntu, macOS and Windows, and on each of them installs the packed tarball on Node 20 and runs the binary. The platform branches (`sh` vs `cmd.exe`, `open` vs `xdg-open` vs `start`, `command -v` vs `where`) are pure functions with unit tests for all three.
+
+One Windows caveat: a prompt handed to an agent runner goes through `cmd.exe`, where `%NAME%` expands even inside quotes. Avoid `%` in task-set prompts there.
+
 ## What it reads
 
 Claude Code (`~/.claude/projects/*.jsonl`, `%USERPROFILE%\.claude\projects` on Windows) and Codex (`~/.codex/sessions/**/*.jsonl`). The adapter is detected from the file itself, and coverage is reported per adapter. Session directories are opened read-only.
@@ -200,6 +212,22 @@ npm install          # dev dependencies only: typescript, @types/node
 npm test             # 95 tests, runs the TypeScript source, Node 22.18+
 npm run typecheck
 ```
+
+## Releasing
+
+Every push to `main` runs the suite on the three platforms and installs the packed tarball on the minimum supported Node. A release is a tag:
+
+```bash
+npm version patch        # or minor, or major: writes package.json and creates v0.1.1
+git push --follow-tags
+```
+
+The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, and publishes to npm with provenance.
+
+One-time setup before the first release:
+
+- set `repository` in `package.json` (provenance will not publish without it);
+- add `NPM_TOKEN` as a repository secret: an npm automation token with publish rights.
 
 ## Design
 

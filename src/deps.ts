@@ -16,6 +16,28 @@ export function shellFor(
     : { file: 'sh', args: ['-c', command] };
 }
 
+/**
+ * Windows cannot spawn a `.cmd` shim without a shell, so arguments are joined into one command
+ * line. Inside double quotes cmd treats `""` as a literal quote.
+ */
+export function quoteWindowsArgument(value: string): string {
+  if (value === '') return '""';
+  if (!/[\s"&|<>^()]/.test(value)) return value;
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+export function fileInvocation(
+  platform: NodeJS.Platform,
+  file: string,
+  args: string[],
+): { file: string; args: string[] } {
+  if (platform !== 'win32') return { file, args };
+  return {
+    file: 'cmd.exe',
+    args: ['/d', '/s', '/c', [file, ...args].map(quoteWindowsArgument).join(' ')],
+  };
+}
+
 /** How a URL is handed to the default browser. */
 export function openFor(
   platform: NodeJS.Platform,
@@ -40,6 +62,7 @@ export type Deps = {
   readText(path: string): Promise<string>;
   writeArtifact(path: string, content: string): Promise<void>;
   exec(command: string, cwd: string): Promise<ExecResult>;
+  execFile(file: string, args: string[], cwd: string): Promise<ExecResult>;
   copyDir(from: string, to: string): Promise<void>;
   makeTempDir(prefix: string): Promise<string>;
   removeDir(path: string): Promise<void>;
@@ -54,6 +77,27 @@ export type Deps = {
   /** Writes immediately, for progress that must appear before a long wait. */
   notify(message: string): void;
 };
+
+function collect(file: string, args: string[], cwd: string): Promise<ExecResult> {
+  return new Promise((resolve) => {
+    const child = spawn(file, args, { cwd });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', (error: Error) => {
+      resolve({ code: 127, stdout, stderr: `${stderr}${error.message}` });
+    });
+    child.on('close', (code: number | null) => {
+      resolve({ code: code ?? 1, stdout, stderr });
+    });
+  });
+}
 
 export const nodeDeps: Deps = {
   async kind(path) {
@@ -76,25 +120,12 @@ export const nodeDeps: Deps = {
     await writeFile(path, content, 'utf8');
   },
   exec(command, cwd) {
-    return new Promise((resolve) => {
-      const shell = shellFor(process.platform, command);
-      const child = spawn(shell.file, shell.args, { cwd });
-      let stdout = '';
-      let stderr = '';
-
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      child.stderr.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-      child.on('error', (error: Error) => {
-        resolve({ code: 127, stdout, stderr: `${stderr}${error.message}` });
-      });
-      child.on('close', (code: number | null) => {
-        resolve({ code: code ?? 1, stdout, stderr });
-      });
-    });
+    const shell = shellFor(process.platform, command);
+    return collect(shell.file, shell.args, cwd);
+  },
+  execFile(file, args, cwd) {
+    const invocation = fileInvocation(process.platform, file, args);
+    return collect(invocation.file, invocation.args, cwd);
   },
   async copyDir(from, to) {
     await cp(from, to, { recursive: true });
