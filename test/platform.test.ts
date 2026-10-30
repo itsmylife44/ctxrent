@@ -24,9 +24,14 @@ test('a url is handed to the right opener per platform', () => {
     file: 'xdg-open',
     args: ['http://127.0.0.1:1/t'],
   });
-  const win = openFor('win32', 'http://127.0.0.1:1/t');
-  assert.equal(win.file, 'cmd.exe');
-  assert.match(win.args.join(' '), /^\/d \/s \/c start "" "http:\/\/127\.0\.0\.1:1\/t"$/);
+  assert.deepEqual(openFor('win32', 'http://127.0.0.1:1/t'), {
+    file: 'rundll32.exe',
+    args: ['url.dll,FileProtocolHandler', 'http://127.0.0.1:1/t'],
+  });
+  assert.deepEqual(openFor('win32', 'C:\\Users\\me\\report.html'), {
+    file: 'explorer.exe',
+    args: ['C:\\Users\\me\\report.html'],
+  });
 });
 
 test('a program is invoked with argv, never a shell string, off windows', () => {

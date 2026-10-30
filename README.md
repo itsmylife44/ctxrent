@@ -173,7 +173,7 @@ Both variants run over the same tasks, each run in a fresh copy of its directory
 | --- | --- |
 | macOS | runs from source or as a package; shell commands through `sh`, browser through `open` |
 | Linux | same as macOS, browser through `xdg-open` |
-| Windows | package install, commands through `cmd.exe`, runner lookup through `where`, browser through `start` |
+| Windows | package install, commands through `cmd.exe`, runner lookup through `where`, reports opened with `explorer` and URLs with `rundll32` |
 
 CI runs the full suite on Ubuntu, macOS and Windows, and on each of them installs the packed tarball on Node 20 and runs the binary. The platform branches (`sh` vs `cmd.exe`, `open` vs `xdg-open` vs `start`, `command -v` vs `where`) are pure functions with unit tests for all three.
 

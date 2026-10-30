@@ -38,16 +38,22 @@ export function fileInvocation(
   };
 }
 
-/** How a URL is handed to the default browser. */
+/**
+ * How a file or URL is handed to the default application. Windows uses explorer for paths and
+ * rundll32 for URLs: going through `cmd /c start` means Node's own quoting produces `\"`, which
+ * cmd reads as a literal backslash and fails with "cannot find '\\'".
+ */
 export function openFor(
   platform: NodeJS.Platform,
-  url: string,
+  target: string,
 ): { file: string; args: string[] } {
   if (platform === 'win32') {
-    return { file: 'cmd.exe', args: ['/d', '/s', '/c', `start "" "${url}"`] };
+    return /^https?:\/\//i.test(target)
+      ? { file: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', target] }
+      : { file: 'explorer.exe', args: [target] };
   }
-  if (platform === 'darwin') return { file: 'open', args: [url] };
-  return { file: 'xdg-open', args: [url] };
+  if (platform === 'darwin') return { file: 'open', args: [target] };
+  return { file: 'xdg-open', args: [target] };
 }
 
 export type ExecResult = {
@@ -78,9 +84,14 @@ export type Deps = {
   notify(message: string): void;
 };
 
-function collect(file: string, args: string[], cwd: string): Promise<ExecResult> {
+function collect(
+  file: string,
+  args: string[],
+  cwd: string,
+  verbatim = false,
+): Promise<ExecResult> {
   return new Promise((resolve) => {
-    const child = spawn(file, args, { cwd });
+    const child = spawn(file, args, { cwd, windowsVerbatimArguments: verbatim });
     let stdout = '';
     let stderr = '';
 
@@ -121,11 +132,12 @@ export const nodeDeps: Deps = {
   },
   exec(command, cwd) {
     const shell = shellFor(process.platform, command);
-    return collect(shell.file, shell.args, cwd);
+    // On Windows the command is one pre-built string for cmd.exe: quoting it again would break it.
+    return collect(shell.file, shell.args, cwd, process.platform === 'win32');
   },
   execFile(file, args, cwd) {
     const invocation = fileInvocation(process.platform, file, args);
-    return collect(invocation.file, invocation.args, cwd);
+    return collect(invocation.file, invocation.args, cwd, process.platform === 'win32');
   },
   async copyDir(from, to) {
     await cp(from, to, { recursive: true });
