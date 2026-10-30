@@ -289,6 +289,14 @@ git push --follow-tags
 
 The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, and publishes to npm with provenance.
 
+On the same tag, the workflow also creates a GitHub release with the packed tarball attached, so the CLI can be installed straight from GitHub:
+
+```bash
+npm i -g https://github.com/<owner>/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz
+# or, with no npm at all: extract the asset and run
+node package/dist/cli.js
+```
+
 One-time setup before the first release:
 
 - set `repository` in `package.json` (provenance will not publish without it);
