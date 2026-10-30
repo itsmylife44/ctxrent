@@ -85,6 +85,8 @@ function metricLine(session: SessionSummary): string {
 
   if (session.coverage !== null) {
     parts.push(`${Math.round(100 * session.coverage)}% of context accounted for`);
+  } else {
+    parts.push('coverage unavailable');
   }
   if (session.unknownInjections > 0) parts.push(`${session.unknownInjections} unmeasurable`);
 
@@ -116,9 +118,9 @@ function carrierLine(
   lastTurn: number,
   injections: number,
 ): string {
-  const name = truncate(carrier, 32).padEnd(32);
+  const name = truncate(carrier, 30).padEnd(30);
   const span = `t${firstTurn}–${lastTurn}${injections > 1 ? ` ×${injections}` : ''}`;
-  return `  ${name}${numbers.format(rent).padStart(9)} rent${numbers.format(size).padStart(8)} tok ${span.padStart(11)}`;
+  return `  ${name} ${numbers.format(rent).padStart(9)} rent${numbers.format(size).padStart(8)} tok ${span.padStart(11)}`;
 }
 
 function renderList(model: AuditModel): string {

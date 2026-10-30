@@ -6,6 +6,8 @@ const MIN_DROP_TOKENS = 500;
 
 function isCompaction(previous: number | null, current: number | null): boolean {
   if (previous === null || current === null) return false;
+  // A zero prompt is a missing measurement, not a context that was emptied.
+  if (current <= 0) return false;
   if (current >= previous) return false;
   if (previous - current < MIN_DROP_TOKENS) return false;
   return (previous - current) / previous >= MIN_DROP_SHARE;

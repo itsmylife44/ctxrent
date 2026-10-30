@@ -122,3 +122,12 @@ test('a session whose injections are all unknown reports no injected total, not 
   assert.equal(parsed.residualContextTokens, null);
   assert.equal(parsed.unknownInjections, 1);
 });
+
+test('a trailing turn with a zero prompt does not erase the coverage figure', async () => {
+  const result = await run(['audit', 'test/fixtures/claude-code/zero-tail', '--json'], nodeDeps);
+  const parsed = JSON.parse(result.stdout).sessions[0];
+
+  assert.equal(parsed.turns[1].contextTokens, 0);
+  assert.equal(parsed.coverage, 0.1);
+  assert.equal(parsed.residualContextTokens, 900);
+});

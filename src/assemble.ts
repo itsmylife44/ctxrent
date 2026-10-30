@@ -40,8 +40,10 @@ export function assembleSession(parts: SessionParts): SessionSummary {
   const injectedTokens =
     injectionCount === 0 ? 0 : measuredInjections === 0 ? null : measuredTokens;
 
+  // The last turn can record a zero prompt (a synthetic or trailing record); the last positive
+  // measurement is the one worth comparing against.
   const lastContextTokens =
-    [...turns].reverse().find((turn) => turn.contextTokens !== null)?.contextTokens ?? null;
+    [...turns].reverse().find((turn) => (turn.contextTokens ?? 0) > 0)?.contextTokens ?? null;
 
   const epochStart = lastEpochStart(turns);
   let injectedInEpoch = 0;

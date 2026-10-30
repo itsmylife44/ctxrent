@@ -93,7 +93,7 @@ function fromCarriers(input: PrescriptionInput): Prescription[] {
       claims: 1,
       advice:
         'Move fixed context into a file the agent reads on demand, not an always-on attachment.',
-      example: `attachment · ${carrier.size.toLocaleString('en-US')} tokens × ${carrier.injections}`,
+      example: `attachment, ${carrier.size.toLocaleString('en-US')} tokens across ${carrier.injections.toLocaleString('en-US')} injections`,
     }));
 }
 

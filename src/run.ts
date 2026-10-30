@@ -137,10 +137,15 @@ async function runCheck(args: string[], deps: Deps): Promise<Result> {
   if (!parsed.ok) return failure(parsed.error);
 
   const { maxWaste, json, all } = parsed.options;
-  const target = parsed.options.target ?? (await latestSessionFile(deps));
-  if (target === null) return failure('ctxrent: no sessions found');
 
-  const loaded = await loadSessions(target, deps, all);
+  let loaded: Loaded;
+  if (parsed.options.target === undefined && all) {
+    loaded = await loadFromRoots(await deps.defaultRoots(), deps);
+  } else {
+    const target = parsed.options.target ?? (await latestSessionFile(deps));
+    if (target === null) return failure('ctxrent: no sessions found');
+    loaded = await loadSessions(target, deps, all);
+  }
   if (!loaded.ok) return failure(loaded.error);
 
   const { rent, wasteRent } = loaded.model.totals;
@@ -205,6 +210,18 @@ async function parseFiles(
   }
 
   return { sessions, records };
+}
+
+async function loadFromRoots(roots: string[], deps: Deps): Promise<Loaded> {
+  const files: string[] = [];
+  for (const root of roots) files.push(...(await walkSessions(root, deps)));
+
+  if (files.length === 0) return { ok: false, error: 'ctxrent: no sessions found' };
+
+  const { sessions, records } = await parseFiles(files, deps);
+  if (records === 0) return { ok: false, error: 'ctxrent: no readable sessions' };
+
+  return { ok: true, model: summariseSessions(sessions) };
 }
 
 async function loadSessions(target: string, deps: Deps, all: boolean): Promise<Loaded> {

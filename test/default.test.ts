@@ -59,3 +59,34 @@ test('with no arguments and no sessions, ctxrent says so', async () => {
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /no sessions found/);
 });
+
+test('check --all with no path gates the whole archive, not the latest session', async () => {
+  let reads = 0;
+  const deps = {
+    ...nodeDeps,
+    async defaultRoots() {
+      return ['root'];
+    },
+    async kind(path: string) {
+      return path === 'root' ? ('directory' as const) : ('file' as const);
+    },
+    async listDir() {
+      return ['a.jsonl', 'b.jsonl'];
+    },
+    async readText() {
+      reads += 1;
+      return lines;
+    },
+    async modifiedAt() {
+      return 1;
+    },
+    notify() {},
+  };
+
+  const result = await run(['check', '--all', '--max-waste', '40'], deps);
+
+  // The fixture carries no file read or named tool result, so waste is unmeasurable: exit 2.
+  // The point is that both sessions were read, not just the most recent one.
+  assert.equal(reads, 2);
+  assert.equal(result.exitCode, 2);
+});
