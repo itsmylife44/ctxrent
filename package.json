@@ -32,7 +32,7 @@
     "prepublishOnly": "npm test && npm run typecheck",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "version": "node scripts/version.js && git add skills/ctxrent/SKILL.md README.md"
+    "version": "node scripts/version.js && git add skills/ctxrent/SKILL.md"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

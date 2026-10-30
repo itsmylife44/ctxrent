@@ -30,7 +30,7 @@ Then, inside Claude Code:
 
 The agent does the rest on its own:
 
-1. runs the CLI — from your `PATH` if you installed it, otherwise straight from the GitHub release through `npx`, with nothing installed;
+1. runs the CLI — from your `PATH` if you installed it, otherwise the latest release from npm through `npx`, with nothing installed;
 2. measures every session on disk and keeps the habits that recur;
 3. writes one rule per habit from that evidence;
 4. opens the review page on `127.0.0.1`, where you tick what stays and press Apply.
@@ -41,16 +41,16 @@ The skill follows the [Agent Skills](https://agentskills.io) specification, so t
 
 ## Use the CLI directly
 
-Everything the skill does is a plain command, so you can also run it yourself. From the release, with no install:
+Everything the skill does is a plain command, so you can also run it yourself, with no install:
 
 ```bash
-npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz ctxrent --help
+npx -y ctxrent@latest --help
 ```
 
 Or put it on your `PATH`:
 
 ```bash
-npm i -g https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz
+npm i -g ctxrent
 ctxrent                   # the session you just finished, then the page you apply from
 ```
 
@@ -254,7 +254,7 @@ Claude Code (`~/.claude/projects/*.jsonl`, `%USERPROFILE%\.claude\projects` on W
 
 ## Privacy
 
-- The CLI makes no outbound network connection, ever. The only socket is the loopback review page, bound to `127.0.0.1` on an ephemeral port. The one download is the skill fetching the CLI from the GitHub release through `npx` when `ctxrent` is not on your `PATH`; install it and that goes away too.
+- The CLI makes no outbound network connection, ever. The only socket is the loopback review page, bound to `127.0.0.1` on an ephemeral port. The one download is the skill fetching the CLI from npm through `npx` when `ctxrent` is not on your `PATH`; install it and that goes away too.
 - No telemetry, no account, no upload.
 - No runtime dependencies: what you clone is what runs.
 - Nothing is written unless you ask: `--html` writes the report you named, `teach --write` and `review` write the block you approved.
@@ -301,9 +301,9 @@ npm version patch        # or minor, or major: writes package.json and creates v
 git push --follow-tags
 ```
 
-`npm version` also points the skill at the release the new tag creates (`scripts/version.js`), and a test fails if the two ever disagree: the skill runs the CLI from that release, so a stale URL would ship an old CLI to every `/ctxrent`. Never publish a version number twice: `npx` keeps what it installed from a URL, so a machine that ran the old tarball keeps running it.
+The skill runs `npx -y ctxrent@latest`, so a release reaches every `/ctxrent` without anyone updating the skill: for a tag, `npx` asks the registry for the newest version on every run. That is why the CLI ships through npm and not as a release URL, which `npx` would reuse from its cache forever. `npm version` keeps the skill's `metadata.version` in step (`scripts/version.js`).
 
-The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, and creates a GitHub release with the packed tarball attached — the file the skill runs. It then publishes to npm with provenance, if an `NPM_TOKEN` repository secret is set; without it, the release is the only channel.
+The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, attaches the packed tarball to a GitHub release, and publishes the same tarball to npm with provenance. Publishing needs an `NPM_TOKEN` repository secret (an npm automation token); without it the job fails, because npm is what the skill runs.
 
 ## Design
 

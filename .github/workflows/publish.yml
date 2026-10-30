@@ -45,8 +45,7 @@ jobs:
           path: ctxrent-*.tgz
           if-no-files-found: error
 
-  # The GitHub release comes before npm on purpose: the skill runs the CLI from this release,
-  # and it must not depend on npm credentials.
+  # The GitHub release keeps the tarball next to the source; npm is what the skill runs.
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -79,21 +78,17 @@ jobs:
         with:
           name: tarball
 
-      - name: is an npm token configured?
-        id: npm
+      - name: the npm token is set
         run: |
-          if [ -n "${NODE_AUTH_TOKEN}" ]; then
-            echo "set=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "set=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::NPM_TOKEN is not set: the GitHub release is the only channel for this version."
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::error::NPM_TOKEN is not set: the skill runs ctxrent@latest from npm, so a release without it ships nothing."
+            exit 1
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # The same bytes as the release asset: publishing the tarball skips prepack and a rebuild.
       - name: publish to npm
-        if: steps.npm.outputs.set == 'true'
         run: npm publish ./ctxrent-*.tgz --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

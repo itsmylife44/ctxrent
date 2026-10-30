@@ -2,11 +2,11 @@
 name: ctxrent
 description: Context rent of the user's coding-agent sessions, turned into approved rules for CLAUDE.md or AGENTS.md. Use when the user runs /ctxrent, asks where their tokens or context go, why sessions are slow or expensive, or wants hygiene rules from their own session history.
 license: MIT
-compatibility: Node 20 or newer. Reads Claude Code and Codex session records under the user's home directory. Runs the ctxrent CLI from PATH, or from its GitHub release through npx when it is not installed.
+compatibility: Node 20 or newer. Reads Claude Code and Codex session records under the user's home directory. Runs the ctxrent CLI from PATH, or the latest release from npm through npx when it is not installed.
 metadata:
   version: "0.1.0"
   category: developer-tools
-allowed-tools: Bash(ctxrent *) Bash(npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/* ctxrent *)
+allowed-tools: Bash(ctxrent *) Bash(npx -y ctxrent@latest *)
 ---
 
 # ctxrent
@@ -24,10 +24,10 @@ If the user asked for something narrower (a gate, a shareable report, a comparis
 If `ctxrent --help` succeeds, the command is `ctxrent`. Otherwise it is:
 
 ```bash
-npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz ctxrent
+npx -y ctxrent@latest
 ```
 
-That runs the released CLI without installing anything. Below, `ctxrent` means whichever one works.
+That runs the latest release from npm without installing anything; npx checks for a newer one on every run. Below, `ctxrent` means whichever one works.
 
 Done when `ctxrent --help` prints the usage.
 

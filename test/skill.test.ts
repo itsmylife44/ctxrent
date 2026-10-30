@@ -59,13 +59,11 @@ test('ctxrent skill prints the bundled file, so there is one copy', async () => 
   assert.equal(result.stdout, text);
 });
 
-test('the skill runs the release of the version it ships with', () => {
+test('the skill runs the latest npm release and states its own version', () => {
   const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
-  const urls = text.match(/releases\/download\/v[^/\s]+\/ctxrent-[^\s]+\.tgz/g) ?? [];
 
-  assert.ok(urls.length > 0, 'the skill must name the release it runs');
-  for (const url of urls) {
-    assert.equal(url, `releases/download/v${version}/ctxrent-${version}.tgz`);
-  }
+  // A tag makes npx check the registry on every run; a fixed URL would be reused from its cache.
+  assert.match(text, /^npx -y ctxrent@latest$/m);
+  assert.ok(!text.includes('releases/download'), 'no release URL: npx would cache it forever');
   assert.match(text, new RegExp(`version: "${version.replaceAll('.', '\\.')}"`));
 });
