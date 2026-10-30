@@ -23,6 +23,8 @@ export type Result = {
 };
 
 const MAX_DEPTH = 8;
+const MIN_SESSIONS = 3;
+const RECENT_DAYS = 30;
 const DEFAULT_TASK_SET = 'ctxrent.json';
 const DEFAULT_MAX_WASTE = 40;
 
@@ -61,8 +63,8 @@ export async function run(argv: string[], deps: Deps): Promise<Result> {
 const USAGE = `ctxrent measures the context rent of coding-agent sessions.
 
 Usage
-  ctxrent                        the session you just finished, and in a terminal
-                                 also its visual report, opened
+  ctxrent                        the session you just finished; in a terminal it then
+                                 opens the review page, where the rules can be applied
   ctxrent audit <path>           a session file, or a directory of sessions
       --all                      walk the path recursively
       --json                     print the model instead of the report
@@ -114,16 +116,34 @@ async function runLatest(deps: Deps): Promise<Result> {
   const result = await runAudit([file], deps);
   if (!deps.interactive || result.exitCode !== 0) return result;
 
-  // The visual report is the readable artifact; where a person is waiting, make it and show it
-  // without asking for a filename.
-  const loaded = await loadSessions(file, deps, false);
-  if (!loaded.ok) return result;
+  // Where a person is waiting, the useful surface is the page you can act on, not a file on disk.
+  const recent = await recentFiles(deps, RECENT_DAYS);
+  const files = recent.length >= MIN_SESSIONS ? recent : await allFiles(deps);
 
-  const path = defaultReportPath(basename(file, '.jsonl'));
-  await deps.writeArtifact(path, renderHtml(loaded.model));
-  await deps.openUrl(path);
+  deps.notify(result.stdout);
+  deps.notify('\n');
 
-  return { ...result, stdout: `${result.stdout}\nvisual report ${path} (opened)\n` };
+  return openReview(files, deps, await deps.defaultInstructionFile(), MIN_SESSIONS);
+}
+
+/** Sessions touched recently: the rules worth writing down come from this month, not from 2024. */
+async function recentFiles(deps: Deps, days: number): Promise<string[]> {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const files: string[] = [];
+
+  for (const root of await deps.defaultRoots()) {
+    for (const file of await walkSessions(root, deps)) {
+      if ((await deps.modifiedAt(file)) >= cutoff) files.push(file);
+    }
+  }
+
+  return files;
+}
+
+async function allFiles(deps: Deps): Promise<string[]> {
+  const files: string[] = [];
+  for (const root of await deps.defaultRoots()) files.push(...(await walkSessions(root, deps)));
+  return files;
 }
 
 function defaultReportPath(label: string): string {
@@ -344,18 +364,12 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
   return { exitCode: 0, stdout: renderTeach({ ...base, outcome: 'applied' }), stderr: '' };
 }
 
-async function runReview(args: string[], deps: Deps): Promise<Result> {
-  const parsed = parseReviewArgs(args);
-  if (!parsed.ok) return failure(parsed.error);
-
-  const { target, file, minSessions } = parsed.options;
-
-  const files: string[] = [];
-  if (target === undefined) {
-    for (const root of await deps.defaultRoots()) files.push(...(await walkSessions(root, deps)));
-  } else {
-    files.push(...(await walkSessions(target, deps)));
-  }
+async function openReview(
+  files: string[],
+  deps: Deps,
+  destination: string,
+  minSessions: number,
+): Promise<Result> {
   if (files.length === 0) return failure('ctxrent: no sessions found');
 
   const { sessions, records } = await parseFiles(files, deps);
@@ -373,7 +387,6 @@ async function runReview(args: string[], deps: Deps): Promise<Result> {
     };
   }
 
-  const destination = file ?? (await deps.defaultInstructionFile());
   const state: { applied: { target: string; rules: number } | null } = { applied: null };
 
   const server = await startReview({
@@ -408,6 +421,27 @@ async function runReview(args: string[], deps: Deps): Promise<Result> {
         : `applied ${state.applied.rules} rule(s) to ${state.applied.target}\n`,
     stderr: '',
   };
+}
+
+async function runReview(args: string[], deps: Deps): Promise<Result> {
+  const parsed = parseReviewArgs(args);
+  if (!parsed.ok) return failure(parsed.error);
+
+  const { target, file, minSessions } = parsed.options;
+
+  const files: string[] = [];
+  if (target === undefined) {
+    for (const root of await deps.defaultRoots()) files.push(...(await walkSessions(root, deps)));
+  } else {
+    files.push(...(await walkSessions(target, deps)));
+  }
+  if (files.length === 0) return failure('ctxrent: no sessions found');
+
+  const { sessions, records } = await parseFiles(files, deps);
+  if (records === 0) return failure('ctxrent: no readable sessions');
+
+  const destination = file ?? (await deps.defaultInstructionFile());
+  return openReview(files, deps, destination, minSessions);
 }
 
 function parseReviewArgs(
