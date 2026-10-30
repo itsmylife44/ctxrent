@@ -44,13 +44,13 @@ The skill follows the [Agent Skills](https://agentskills.io) specification, so t
 Everything the skill does is a plain command, so you can also run it yourself. From the release, with no install:
 
 ```bash
-npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.1/ctxrent-0.1.1.tgz ctxrent --help
+npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz ctxrent --help
 ```
 
 Or put it on your `PATH`:
 
 ```bash
-npm i -g https://github.com/itsmylife44/ctxrent/releases/download/v0.1.1/ctxrent-0.1.1.tgz
+npm i -g https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz
 ctxrent                   # the session you just finished, then the page you apply from
 ```
 
