@@ -39,6 +39,8 @@ const session = [
 ].join('\n');
 
 function archive(files: Record<string, string>, modified: Record<string, number> = {}) {
+  // The code joins paths with path.join, which uses backslashes on Windows; the fake tree uses /.
+  const slash = (path: string) => path.replaceAll('\\', '/');
   const directories = new Set(['root', 'root/p', 'root/p/s', 'root/p/s/subagents']);
   return {
     ...nodeDeps,
@@ -46,11 +48,13 @@ function archive(files: Record<string, string>, modified: Record<string, number>
     async defaultRoots() {
       return ['root'];
     },
-    async kind(path: string) {
+    async kind(raw: string) {
+      const path = slash(raw);
       if (directories.has(path)) return 'directory' as const;
       return path in files ? ('file' as const) : ('missing' as const);
     },
-    async listDir(path: string) {
+    async listDir(raw: string) {
+      const path = slash(raw);
       const children = new Set<string>();
       for (const name of [...directories, ...Object.keys(files)]) {
         if (name.startsWith(`${path}/`)) children.add(name.slice(path.length + 1).split('/')[0] as string);
@@ -58,12 +62,12 @@ function archive(files: Record<string, string>, modified: Record<string, number>
       return [...children];
     },
     async readText(path: string) {
-      const text = files[path];
+      const text = files[slash(path)];
       if (text === undefined) throw new Error('missing');
       return text;
     },
     async modifiedAt(path: string) {
-      return modified[path] ?? 1;
+      return modified[slash(path)] ?? 1;
     },
   };
 }
