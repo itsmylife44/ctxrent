@@ -129,8 +129,10 @@ A pattern that comes from always-on context — an attachment re-injected every 
 The skill teaches your agent the protocol; the CLI is called by the agent, never the other way round.
 
 ```bash
-ctxrent skill > ~/.claude/skills/ctxrent/SKILL.md   # install once
+npx skills add <owner>/ctxrent --agent claude-code -g   # installs to ~/.claude/skills/ctxrent
 ```
+
+From a local clone, `npx skills add . --agent claude-code -g`. The skill follows the [Agent Skills](https://agentskills.io) specification, so the same install works for Codex, Cursor, Gemini CLI and the rest of the agents `skills` supports; `ctxrent skill` prints the file if you would rather place it yourself.
 
 Then, inside a session, you ask for it and the agent does the work:
 

@@ -10,7 +10,7 @@ import { renderDiff } from './report/diff.ts';
 import { parseTaskSet, templateTaskSet } from './taskset.ts';
 import { diffTaskSet } from './diff.ts';
 import { findPatterns } from './prescriptions.ts';
-import { SKILL_TEXT } from './skill.ts';
+import { skillText } from './skill.ts';
 import {
   composeBlock,
   mergeBlock,
@@ -126,7 +126,7 @@ async function dispatch(argv: string[], deps: Deps): Promise<Result> {
   if (command === 'check') return runCheck(rest, deps);
   if (command === 'teach') return runTeach(rest, deps);
   if (command === 'findings') return runFindings(rest, deps);
-  if (command === 'skill') return { exitCode: 0, stdout: SKILL_TEXT, stderr: '' };
+  if (command === 'skill') return { exitCode: 0, stdout: skillText(), stderr: '' };
   if (command === 'review') return runReview(rest, deps);
   if (command === 'init') return runInit(rest, deps);
   if (command === 'diff') return runDiff(rest, deps);
