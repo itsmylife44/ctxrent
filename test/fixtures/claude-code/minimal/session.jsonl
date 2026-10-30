@@ -1,0 +1,5 @@
+{"type":"summary","summary":"Fixture session with no prompts","leafUuid":"u-0"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"fixture"}]},"sessionId":"fixture-minimal","uuid":"u-1","timestamp":"2026-01-01T00:00:00.000Z"}
+{"type":"assistant","message":{"id":"msg_A","role":"assistant","content":[{"type":"text","text":"fixture"}],"usage":{"input_tokens":2,"cache_read_input_tokens":100,"cache_creation_input_tokens":200,"output_tokens":20}},"sessionId":"fixture-minimal","uuid":"a-1","timestamp":"2026-01-01T00:00:01.000Z"}
+{"type":"assistant","message":{"id":"msg_A","role":"assistant","content":[{"type":"text","text":"fixture"}],"usage":{"input_tokens":2,"cache_read_input_tokens":100,"cache_creation_input_tokens":200,"output_tokens":20}},"sessionId":"fixture-minimal","uuid":"a-2","timestamp":"2026-01-01T00:00:02.000Z"}
+{"type":"assistant","message":{"id":"msg_B","role":"assistant","content":[{"type":"text","text":"fixture"}],"usage":{"input_tokens":5,"cache_read_input_tokens":500,"cache_creation_input_tokens":0,"output_tokens":25}},"sessionId":"fixture-minimal","uuid":"a-3","timestamp":"2026-01-01T00:00:03.000Z"}

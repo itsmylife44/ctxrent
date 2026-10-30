@@ -1,0 +1,21 @@
+{
+  "name": "ctxrent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Measure the context rent of coding-agent sessions",
+  "bin": {
+    "ctxrent": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
