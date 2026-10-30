@@ -35,6 +35,8 @@ The agent does the rest on its own:
 3. writes one rule per habit from that evidence;
 4. opens the review page on `127.0.0.1`, where you tick what stays and press Apply.
 
+![The review page: the rent, the score, and the rules the agent wrote, each one ticked until you untick it](docs/images/review-page.png)
+
 Nothing reaches your `CLAUDE.md` / `AGENTS.md` before you press Apply. You need Node 20 or newer.
 
 The skill follows the [Agent Skills](https://agentskills.io) specification, so the same install works in Codex, Cursor, Gemini CLI and the other agents `skills` supports; there, ask for it in words ("where do my tokens go?"). `--agent claude-code` installs for one agent only; `ctxrent skill` prints the file if you would rather place it yourself.
@@ -65,6 +67,10 @@ node src/cli.ts --help
 Windows records live in `%USERPROFILE%\.claude\projects` and `%USERPROFILE%\.codex\sessions`. Where `ctxrent diff` runs a command, it uses `cmd.exe` on Windows and `sh` everywhere else.
 
 ## What it looks like
+
+`ctxrent findings` and `ctxrent check` on the author's own archive of 1,315 sessions. Each finding also has an `example:` line quoting the command that caused it; those lines are cut here because they quote private paths, and so are the ten seconds of measuring.
+
+![ctxrent findings, then ctxrent check over the whole archive](docs/images/findings.gif)
 
 Real output from the test fixture in `test/fixtures/`, with some lines trimmed for length:
 
