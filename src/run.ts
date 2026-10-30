@@ -34,6 +34,7 @@ type AuditOptions = {
   all: boolean;
   html: string | null;
   open: boolean;
+  since: number | null;
 };
 
 type DiffOptions = {
@@ -47,6 +48,7 @@ type CheckOptions = {
   maxWaste: number;
   json: boolean;
   all: boolean;
+  since: number | null;
 };
 
 type Loaded = { ok: true; model: AuditModel } | { ok: false; error: string };
@@ -67,6 +69,7 @@ Usage
                                  opens the review page, where the rules can be applied
   ctxrent audit <path>           a session file, or a directory of sessions
       --all                      walk the path recursively
+      --since <date>             only sessions modified since then
       --json                     print the model instead of the report
       --html [file]              write a single-file report and open it;
                                  without a file, a temporary one is used
@@ -155,10 +158,10 @@ async function runAudit(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseAuditArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { target, json, all, html, open } = parsed.options;
+  const { target, json, all, html, open, since } = parsed.options;
   if (target === undefined) return failure('ctxrent: audit needs a session path');
 
-  const loaded = await loadSessions(target, deps, all);
+  const loaded = await loadSessions(target, deps, all, since);
   if (!loaded.ok) return failure(loaded.error);
 
   if (json) {
@@ -191,15 +194,15 @@ async function runCheck(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseCheckArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { maxWaste, json, all } = parsed.options;
+  const { maxWaste, json, all, since } = parsed.options;
 
   let loaded: Loaded;
   if (parsed.options.target === undefined && all) {
-    loaded = await loadFromRoots(await deps.defaultRoots(), deps);
+    loaded = await loadFromRoots(await deps.defaultRoots(), deps, since);
   } else {
     const target = parsed.options.target ?? (await latestSessionFile(deps));
     if (target === null) return failure('ctxrent: no sessions found');
-    loaded = await loadSessions(target, deps, all);
+    loaded = await loadSessions(target, deps, all, since);
   }
   if (!loaded.ok) return failure(loaded.error);
 
@@ -267,7 +270,21 @@ async function parseFiles(
   return { sessions, records };
 }
 
-async function loadFromRoots(roots: string[], deps: Deps): Promise<Loaded> {
+async function filterSince(files: string[], deps: Deps, since: number | null): Promise<string[]> {
+  if (since === null) return files;
+
+  const kept: string[] = [];
+  for (const file of files) {
+    if ((await deps.modifiedAt(file)) >= since) kept.push(file);
+  }
+  return kept;
+}
+
+async function loadFromRoots(
+  roots: string[],
+  deps: Deps,
+  since: number | null = null,
+): Promise<Loaded> {
   const files: string[] = [];
   for (const root of roots) files.push(...(await walkSessions(root, deps)));
 
@@ -279,10 +296,16 @@ async function loadFromRoots(roots: string[], deps: Deps): Promise<Loaded> {
   return { ok: true, model: summariseSessions(sessions) };
 }
 
-async function loadSessions(target: string, deps: Deps, all: boolean): Promise<Loaded> {
-  const sessionFiles = all
+async function loadSessions(
+  target: string,
+  deps: Deps,
+  all: boolean,
+  since: number | null = null,
+): Promise<Loaded> {
+  const collected = all
     ? await walkSessions(target, deps)
     : await collectSessionFiles(target, deps);
+  const sessionFiles = await filterSince(collected, deps, since);
 
   if (sessionFiles.length === 0) {
     return { ok: false, error: `ctxrent: no sessions found under ${target}` };
@@ -595,6 +618,7 @@ function parseCheckArgs(
     maxWaste: DEFAULT_MAX_WASTE,
     json: false,
     all: false,
+    since: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -606,6 +630,17 @@ function parseCheckArgs(
     }
     if (argument === '--all') {
       options.all = true;
+      continue;
+    }
+    if (argument === '--since') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --since needs a date' };
+      const parsed = Date.parse(value);
+      if (Number.isNaN(parsed)) {
+        return { ok: false, error: `ctxrent: --since "${value}" is not a date` };
+      }
+      options.since = parsed;
+      index += 1;
       continue;
     }
     if (argument === '--max-waste') {
@@ -668,6 +703,7 @@ function parseAuditArgs(
     all: false,
     html: null,
     open: true,
+    since: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -683,6 +719,17 @@ function parseAuditArgs(
     }
     if (argument === '--no-open') {
       options.open = false;
+      continue;
+    }
+    if (argument === '--since') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --since needs a date' };
+      const parsed = Date.parse(value);
+      if (Number.isNaN(parsed)) {
+        return { ok: false, error: `ctxrent: --since "${value}" is not a date` };
+      }
+      options.since = parsed;
+      index += 1;
       continue;
     }
     if (argument === '--html') {

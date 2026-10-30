@@ -141,6 +141,7 @@ Opens a page served only on `127.0.0.1`, with a real form: each rule is a checkb
 ```bash
 ctxrent check --max-waste 40                    # the latest session
 ctxrent check ~/.claude/projects --all           # the whole archive
+ctxrent check --all --since 2026-10-30           # only sessions after that date
 ```
 
 Exit `0` under the threshold, `1` over it (printing the rules that would have helped), `2` when the record cannot be measured. Missing data never passes silently. This is the shape `eslint --max-warnings` and Lighthouse CI use, so it drops into a nightly job or a hook without a new vocabulary:
@@ -149,6 +150,17 @@ Exit `0` under the threshold, `1` over it (printing the rules that would have he
 # every night, on the machine where the work happens
 0 3 * * * ctxrent check ~/.claude/projects --all --max-waste 40 >> ~/.ctxrent/nightly.log
 ```
+
+## Did it work?
+
+Applying rules changes *future* sessions, not past ones, so the archive average moves slowly and proves little. Compare a window instead:
+
+```bash
+ctxrent check --all --since 2026-10-30 --max-waste 40   # after the change
+ctxrent check --all --since 2026-10-01 --max-waste 40   # from before it
+```
+
+Same command, two dates, and the difference in the reported waste is what the rules bought you. `ctxrent diff` is the stricter test: two variants, one task set, rent and success side by side.
 
 ## Compare two variants
 
