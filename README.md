@@ -18,7 +18,7 @@ npx ctxrent audit <session.jsonl> --html report.html
 npx ctxrent audit ~/.claude/projects --all
 npx ctxrent check --max-waste 40               # gate: 0 ok, 1 over, 2 cannot measure
 npx ctxrent teach                              # what to write down, from every session
-npx ctxrent teach --write ~/.claude/CLAUDE.md  # apply it as a managed block
+npx ctxrent teach --write ~/.claude/CLAUDE.md  # preview, then ask before writing
 ```
 
 Supported records: Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`). The adapter is detected from the file itself.
@@ -72,7 +72,9 @@ Every claim names the carrier and the turns that justify it. Rules that cannot b
   read-via-read-tool    instruction   10,897 claims ·  2300 sessions · 1,093,155,287 token-turns
 ```
 
-It writes a **managed block**, delimited by `<!-- ctxrent:begin -->`, so re-running it replaces its own rules and leaves your text alone. It is a dry run unless you pass `--write`.
+It writes a **managed block**, delimited by `<!-- ctxrent:begin -->`, so re-running it replaces its own rules and leaves your text alone.
+
+Nothing is ever written without consent. `teach` is a dry run by default; with `--write` it prints the target, what will change, the full block, how the change will be verified and how to undo it, and then asks. Without a terminal to answer — a script, CI, a pipe — it refuses and exits non-zero unless `--yes` is passed. That flag is the explicit statement that you chose this.
 
 The output separates two levers, because conflating them produces advice that cannot work:
 
@@ -112,7 +114,7 @@ The verifier's exit code is the only judge of success. Each run happens in a fre
 ## Development
 
 ```bash
-node --test test/*.test.ts      # 84 tests, no network, no real agents
+node --test test/*.test.ts      # 88 tests, no network, no real agents
 npx tsc --noEmit                # typecheck
 ```
 

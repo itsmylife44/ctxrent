@@ -10,6 +10,7 @@ import { renderDiff } from './report/diff.ts';
 import { parseTaskSet, templateTaskSet } from './taskset.ts';
 import { diffTaskSet } from './diff.ts';
 import { instructionBlock, mergeBlock, teach } from './teach.ts';
+import type { TeachPlan } from './report/teach.ts';
 import { renderTeach } from './report/teach.ts';
 
 export type Result = {
@@ -191,7 +192,7 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseTeachArgs(args);
   if (!parsed.ok) return failure(parsed.error);
 
-  const { target, write, minSessions } = parsed.options;
+  const { target, write, minSessions, yes } = parsed.options;
 
   const files: string[] = [];
   if (target === undefined) {
@@ -209,7 +210,7 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
   const teachings = teach(sessions, { minSessions });
   const block = instructionBlock(teachings, sessions.length);
 
-  let writePath: string | null = null;
+  let plan: TeachPlan | null = null;
   if (write !== null) {
     let existing: string | null = null;
     try {
@@ -217,30 +218,70 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
     } catch {
       existing = null;
     }
-    await deps.writeArtifact(write, mergeBlock(existing, block));
-    writePath = write;
+    plan = { path: write, state: stateOf(existing), content: mergeBlock(existing, block) };
   }
 
-  return {
-    exitCode: 0,
-    stdout: renderTeach({
-      teachings,
-      sessionCount: sessions.length,
-      turns: model.totals.turns,
-      block,
-      writePath,
-    }),
-    stderr: '',
+  const base = {
+    teachings,
+    sessionCount: sessions.length,
+    turns: model.totals.turns,
+    block,
+    plan,
   };
+
+  if (plan === null) {
+    return { exitCode: 0, stdout: renderTeach({ ...base, outcome: 'preview' }), stderr: '' };
+  }
+
+  // Never edit a file the agent reads in every session without an explicit yes.
+  let approved = yes;
+  if (!approved) {
+    if (!deps.interactive) {
+      return {
+        exitCode: 1,
+        stdout: renderTeach({ ...base, outcome: 'preview' }),
+        stderr:
+          'ctxrent: refusing to edit an instruction file without confirmation; re-run with --yes\n',
+      };
+    }
+    const rules = teachings.filter((item) => item.lever === 'instruction').length;
+    approved = await deps.confirm(
+      `Apply ${rules} rule(s) to ${plan.path}? This changes how your agent behaves everywhere. [y/N] `,
+    );
+  }
+
+  if (!approved) {
+    return { exitCode: 0, stdout: renderTeach({ ...base, outcome: 'declined' }), stderr: '' };
+  }
+
+  await deps.writeArtifact(plan.path, plan.content);
+  return { exitCode: 0, stdout: renderTeach({ ...base, outcome: 'applied' }), stderr: '' };
+}
+
+function stateOf(existing: string | null): TeachPlan['state'] {
+  if (existing === null || existing.trim() === '') return 'a new file';
+  return existing.includes('<!-- ctxrent:begin -->')
+    ? 'replaces its managed block'
+    : 'appends a block';
 }
 
 function parseTeachArgs(
   args: string[],
-): { ok: true; options: { target: string | undefined; write: string | null; minSessions: number } } | { ok: false; error: string } {
-  const options = { target: undefined as string | undefined, write: null as string | null, minSessions: 3 };
+): { ok: true; options: { target: string | undefined; write: string | null; minSessions: number; yes: boolean } } | { ok: false; error: string } {
+  const options = {
+    target: undefined as string | undefined,
+    write: null as string | null,
+    minSessions: 3,
+    yes: false,
+  };
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index] as string;
+
+    if (argument === '--yes' || argument === '-y') {
+      options.yes = true;
+      continue;
+    }
 
     if (argument === '--write') {
       const value = args[index + 1];

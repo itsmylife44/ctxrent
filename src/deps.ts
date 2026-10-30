@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
 import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,6 +23,9 @@ export type Deps = {
   removeDir(path: string): Promise<void>;
   defaultRoots(): Promise<string[]>;
   modifiedAt(path: string): Promise<number>;
+  /** True when a human is present to answer a question. */
+  interactive: boolean;
+  confirm(question: string): Promise<boolean>;
 };
 
 export const nodeDeps: Deps = {
@@ -81,6 +85,16 @@ export const nodeDeps: Deps = {
       return (await stat(path)).mtimeMs;
     } catch {
       return 0;
+    }
+  },
+  interactive: process.stdin.isTTY === true,
+  async confirm(question) {
+    const reader = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const answer = await reader.question(question);
+      return /^(y|yes|s|si|sì)$/i.test(answer.trim());
+    } finally {
+      reader.close();
     }
   },
 };

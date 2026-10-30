@@ -81,35 +81,102 @@ test('teach is a dry run unless --write is passed', async () => {
   assert.match(result.stdout, /ctxrent:begin/);
 });
 
-test('teach --write applies the block once and updates it in place', async () => {
+function writingDeps(options: { interactive: boolean; answer: boolean }) {
   const stored = new Map<string, string>();
-  const deps = {
-    ...nodeDeps,
-    async readText(path: string) {
-      if (path === 'AGENTS.md') {
-        if (!stored.has(path)) throw new Error('missing');
-        return stored.get(path) as string;
-      }
-      return nodeDeps.readText(path);
-    },
-    async writeArtifact(path: string, content: string) {
-      stored.set(path, content);
+  const writes: string[] = [];
+  const questions: string[] = [];
+  return {
+    stored,
+    writes,
+    questions,
+    deps: {
+      ...nodeDeps,
+      interactive: options.interactive,
+      async confirm(question: string) {
+        questions.push(question);
+        return options.answer;
+      },
+      async readText(path: string) {
+        if (path === 'AGENTS.md') {
+          if (!stored.has(path)) throw new Error('missing');
+          return stored.get(path) as string;
+        }
+        return nodeDeps.readText(path);
+      },
+      async writeArtifact(path: string, content: string) {
+        writes.push(path);
+        stored.set(path, content);
+      },
     },
   };
+}
 
-  const first = await run(
-    ['teach', 'test/fixtures/claude-code', '--min-sessions', '1', '--write', 'AGENTS.md'],
-    deps,
-  );
-  const afterFirst = stored.get('AGENTS.md') ?? '';
-  const second = await run(
-    ['teach', 'test/fixtures/claude-code', '--min-sessions', '1', '--write', 'AGENTS.md'],
-    deps,
-  );
+const teachArgs = [
+  'teach',
+  'test/fixtures/claude-code',
+  '--min-sessions',
+  '1',
+  '--write',
+  'AGENTS.md',
+];
 
-  assert.equal(first.exitCode, 0);
-  assert.equal(second.exitCode, 0);
-  assert.equal(stored.get('AGENTS.md'), afterFirst);
+test('teach refuses to edit without confirmation when nobody can answer', async () => {
+  const harness = writingDeps({ interactive: false, answer: false });
+
+  const result = await run(teachArgs, harness.deps);
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(harness.writes.length, 0);
+  assert.match(result.stderr, /refusing to edit an instruction file without confirmation/);
+});
+
+test('teach asks before writing, and writes only on yes', async () => {
+  const declined = writingDeps({ interactive: true, answer: false });
+  const declinedResult = await run(teachArgs, declined.deps);
+
+  assert.equal(declinedResult.exitCode, 0);
+  assert.equal(declined.writes.length, 0);
+  assert.equal(declined.questions.length, 1);
+  assert.match(declined.questions[0]!, /Apply \d+ rule\(s\) to AGENTS\.md\?/);
+  assert.match(declinedResult.stdout, /nothing written\./);
+
+  const accepted = writingDeps({ interactive: true, answer: true });
+  const acceptedResult = await run(teachArgs, accepted.deps);
+
+  assert.equal(acceptedResult.exitCode, 0);
+  assert.equal(accepted.writes.length, 1);
+  assert.match(acceptedResult.stdout, /wrote the managed block to AGENTS\.md/);
+});
+
+test('teach --yes writes without asking, for scripted use', async () => {
+  const harness = writingDeps({ interactive: false, answer: false });
+
+  const result = await run([...teachArgs, '--yes'], harness.deps);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(harness.writes.length, 1);
+  assert.equal(harness.questions.length, 0);
+});
+
+test('the preview states the target, what changes and how to undo it', async () => {
+  const harness = writingDeps({ interactive: true, answer: false });
+
+  const result = await run(teachArgs, harness.deps);
+
+  assert.match(result.stdout, /target {3}AGENTS\.md/);
+  assert.match(result.stdout, /file {5}a new file/);
+  assert.match(result.stdout, /To undo, delete everything between the two markers/);
+  assert.match(result.stdout, /verify the effect with: ctxrent check/);
+  assert.match(result.stdout, /configuration findings — these are not instructions/);
+});
+
+test('teach --write applies the block once and updates it in place', async () => {
+  const harness = writingDeps({ interactive: false, answer: false });
+
+  await run([...teachArgs, '--yes'], harness.deps);
+  const afterFirst = harness.stored.get('AGENTS.md') ?? '';
+  await run([...teachArgs, '--yes'], harness.deps);
+
+  assert.equal(harness.stored.get('AGENTS.md'), afterFirst);
   assert.equal(afterFirst.match(/ctxrent:begin/g)?.length, 1);
-  assert.match(first.stdout, /wrote the managed block to AGENTS\.md/);
 });

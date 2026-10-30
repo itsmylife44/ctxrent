@@ -2,12 +2,21 @@ import type { Teaching } from '../teach.ts';
 
 const numbers = new Intl.NumberFormat('en-US');
 
+export type TeachPlan = {
+  path: string;
+  state: 'a new file' | 'replaces its managed block' | 'appends a block';
+  content: string;
+};
+
+export type TeachOutcome = 'preview' | 'declined' | 'applied';
+
 export type TeachReport = {
   teachings: Teaching[];
   sessionCount: number;
   turns: number;
   block: string;
-  writePath: string | null;
+  plan: TeachPlan | null;
+  outcome: TeachOutcome;
 };
 
 export function renderTeach(report: TeachReport): string {
@@ -36,22 +45,42 @@ export function renderTeach(report: TeachReport): string {
 
   if (configured.length > 0) {
     lines.push('');
-    lines.push('not instructions — these are configuration, and writing them in AGENTS.md does nothing:');
+    lines.push('configuration findings — these are not instructions:');
     for (const item of configured) {
       lines.push(`  ${item.id}`);
       lines.push(`    ${item.advice}`);
       lines.push(`    evidence: ${numbers.format(item.claims)} claims in ${item.sessions} sessions`);
     }
+    lines.push('  told to the agent in an instruction file, none of these can take effect.');
   }
 
   lines.push('');
-  if (report.writePath === null) {
-    lines.push('dry run — paste this block into your agent instruction file, or pass --write <file>:');
+
+  if (report.plan === null) {
+    lines.push('dry run — nothing will be written. Copy the block below into an instruction file,');
+    lines.push('or re-run with --write <file> to preview an application.');
     lines.push('');
     lines.push(report.block);
-  } else {
-    lines.push(`wrote the managed block to ${report.writePath}`);
-    if (instructions.length === 0) lines.push('the block contains no instruction rules');
+    return `${lines.join('\n')}\n`;
+  }
+
+  lines.push(`target   ${report.plan.path}`);
+  lines.push(`file     ${report.plan.state}`);
+  lines.push(`contents ${instructions.length} rule(s), inside the ctxrent managed block`);
+  lines.push('');
+  lines.push(report.block);
+  lines.push('');
+  lines.push('This edits an instruction file your agent reads in every session of every project.');
+  lines.push('After applying it, verify the effect with: ctxrent check --max-waste 30');
+  lines.push(`To undo, delete everything between the two markers in ${report.plan.path}.`);
+
+  if (report.outcome === 'declined') {
+    lines.push('');
+    lines.push('nothing written.');
+  }
+  if (report.outcome === 'applied') {
+    lines.push('');
+    lines.push(`wrote the managed block to ${report.plan.path}`);
   }
 
   return `${lines.join('\n')}\n`;
