@@ -22,12 +22,26 @@ cd ctxrent
 ./src/cli.ts              # audits the session you just finished
 ```
 
-No install, no build, no dependency. The TypeScript source runs directly on Node 22.18 or newer. To put it on your PATH:
+To run it from the clone you need nothing but Node 22.18 or newer: the TypeScript source runs directly.
 
 ```bash
-ln -s "$PWD/src/cli.ts" /usr/local/bin/ctxrent
+node src/cli.ts --help
+```
+
+To put the command on your PATH, build the package once and install it globally:
+
+```bash
+npm install
+npm run build
+npm install -g .
 ctxrent --help
 ```
+
+The build step is explicit because npm 11 blocks lifecycle scripts by default, so `prepare` does not run on its own. The published package ships the compiled output and needs none of this.
+
+The same three commands work on Windows PowerShell; there are no symlinks and no `sh` involved.
+
+Windows records live in `%USERPROFILE%\.claude\projects` and `%USERPROFILE%\.codex\sessions`. The compiled package runs on Node 20 or newer; developing from source needs 22.18, because the tests import the TypeScript directly. Where `ctxrent diff` runs a command, it uses `cmd.exe` on Windows and `sh` everywhere else.
 
 ## What it looks like
 
@@ -147,7 +161,7 @@ Both variants run over the same tasks, each run in a fresh copy of its directory
 
 ## What it reads
 
-Claude Code (`~/.claude/projects/*.jsonl`) and Codex (`~/.codex/sessions/**/*.jsonl`). The adapter is detected from the file itself, and coverage is reported per adapter. Session directories are opened read-only.
+Claude Code (`~/.claude/projects/*.jsonl`, `%USERPROFILE%\.claude\projects` on Windows) and Codex (`~/.codex/sessions/**/*.jsonl`). The adapter is detected from the file itself, and coverage is reported per adapter. Session directories are opened read-only.
 
 ## Privacy
 
@@ -183,7 +197,7 @@ src/run.ts      the command surface
 
 ```bash
 npm install          # dev dependencies only: typescript, @types/node
-npm test             # 92 tests, no outbound network, no real agents
+npm test             # 95 tests, runs the TypeScript source, Node 22.18+
 npm run typecheck
 ```
 

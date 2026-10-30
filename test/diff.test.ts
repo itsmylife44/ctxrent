@@ -65,6 +65,9 @@ function fakeDeps(options: { agentCode?: number } = {}): Deps & { agentRuns: () 
       variantOf.set(to, from);
     },
     async removeDir() {},
+    async which() {
+      return true;
+    },
     async exec(command: string, cwd: string) {
       const variant = variantOf.get(cwd);
 
@@ -114,6 +117,27 @@ test('a runner that is not installed is reported as unavailable, not as a failur
   assert.equal(result.exitCode, 1);
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /runner "claude" is not available/);
+});
+
+test('the availability check runs before either variant starts', async () => {
+  let executed = 0;
+  const base = fakeDeps();
+  const deps = {
+    ...base,
+    async which() {
+      return false;
+    },
+    async exec(command: string, cwd: string) {
+      executed += 1;
+      return base.exec(command, cwd);
+    },
+  };
+
+  const result = await run(['diff', 'ctxrent.json', '--a', A, '--b', B], deps);
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(executed, 0);
+  assert.match(result.stderr, /not available/);
 });
 
 test('every run happens in its own working copy and is cleaned up afterwards', async () => {

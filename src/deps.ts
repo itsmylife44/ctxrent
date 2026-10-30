@@ -6,6 +6,28 @@ import { join } from 'node:path';
 
 export type PathKind = 'file' | 'directory' | 'missing';
 
+/** How a shell command is run on this platform. Windows has no `sh`. */
+export function shellFor(
+  platform: NodeJS.Platform,
+  command: string,
+): { file: string; args: string[] } {
+  return platform === 'win32'
+    ? { file: 'cmd.exe', args: ['/d', '/s', '/c', command] }
+    : { file: 'sh', args: ['-c', command] };
+}
+
+/** How a URL is handed to the default browser. */
+export function openFor(
+  platform: NodeJS.Platform,
+  url: string,
+): { file: string; args: string[] } {
+  if (platform === 'win32') {
+    return { file: 'cmd.exe', args: ['/d', '/s', '/c', `start "" "${url}"`] };
+  }
+  if (platform === 'darwin') return { file: 'open', args: [url] };
+  return { file: 'xdg-open', args: [url] };
+}
+
 export type ExecResult = {
   code: number;
   stdout: string;
@@ -26,6 +48,7 @@ export type Deps = {
   /** True when a human is present to answer a question. */
   interactive: boolean;
   confirm(question: string): Promise<boolean>;
+  which(binary: string): Promise<boolean>;
   defaultInstructionFile(): Promise<string>;
   openUrl(url: string): Promise<void>;
   /** Writes immediately, for progress that must appear before a long wait. */
@@ -54,7 +77,8 @@ export const nodeDeps: Deps = {
   },
   exec(command, cwd) {
     return new Promise((resolve) => {
-      const child = spawn('sh', ['-c', command], { cwd });
+      const shell = shellFor(process.platform, command);
+      const child = spawn(shell.file, shell.args, { cwd });
       let stdout = '';
       let stderr = '';
 
@@ -99,12 +123,26 @@ export const nodeDeps: Deps = {
     process.stdout.write(message);
   },
   async openUrl(url) {
-    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
+    const opener = openFor(process.platform, url);
     await new Promise<void>((resolve) => {
-      const child = spawn(opener, [url], { stdio: 'ignore', detached: true });
+      const child = spawn(opener.file, opener.args, { stdio: 'ignore', detached: true });
       child.on('error', () => resolve());
       child.unref();
       resolve();
+    });
+  },
+  which(binary) {
+    if (!/^[A-Za-z0-9_-]+$/.test(binary)) return Promise.resolve(false);
+
+    const probe =
+      process.platform === 'win32'
+        ? { file: 'where', args: [binary] }
+        : { file: 'sh', args: ['-c', `command -v ${binary}`] };
+
+    return new Promise((resolve) => {
+      const child = spawn(probe.file, probe.args, { stdio: 'ignore' });
+      child.on('error', () => resolve(false));
+      child.on('close', (code: number | null) => resolve(code === 0));
     });
   },
   async confirm(question) {

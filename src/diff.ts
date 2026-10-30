@@ -33,9 +33,7 @@ export async function diffTaskSet(
   taskSet: TaskSet,
   variants: [Variant, Variant],
 ): Promise<DiffOutcome> {
-  const [first] = variants;
-  const available = await deps.exec(`command -v ${taskSet.runner}`, first.dir);
-  if (available.code !== 0) {
+  if (!(await deps.which(taskSet.runner))) {
     return { ok: false, error: `runner "${taskSet.runner}" is not available` };
   }
 
