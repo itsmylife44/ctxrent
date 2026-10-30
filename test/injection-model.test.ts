@@ -131,3 +131,12 @@ test('a trailing turn with a zero prompt does not erase the coverage figure', as
   assert.equal(parsed.coverage, 0.1);
   assert.equal(parsed.residualContextTokens, 900);
 });
+
+test('an attachment with an empty content falls through to stdout', async () => {
+  const result = await run(['audit', 'test/fixtures/claude-code/stdout-only', '--json'], nodeDeps);
+  const parsed = JSON.parse(result.stdout).sessions[0];
+
+  assert.equal(parsed.turns[0].injections[0].size, 1000);
+  assert.equal(parsed.turns[0].injections[0].sizeMethod, 'estimated');
+  assert.equal(parsed.unknownInjections, 0);
+});

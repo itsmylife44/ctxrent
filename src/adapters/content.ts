@@ -22,7 +22,7 @@ export function textOf(value: unknown): string | null {
   if (value !== null && typeof value === 'object') {
     const object = value as Block;
     let sawText = false;
-    for (const key of ['text', 'thinking', 'rendered', 'content']) {
+    for (const key of ['text', 'thinking', 'rendered', 'content', 'prompt', 'stdout', 'stderr', 'output']) {
       const field = object[key];
       if (typeof field !== 'string') continue;
       sawText = true;

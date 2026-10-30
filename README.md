@@ -256,6 +256,8 @@ One-time setup before the first release:
 
 ## Design
 
+The parser is audited against an independent implementation: totals, turns and every token field agree over the whole archive, and the audit found and fixed a text-extraction bug. See [`docs/audit-parser.md`](./docs/audit-parser.md).
+
 The vocabulary is in [`GLOSSARY.md`](./GLOSSARY.md); the decisions that are hard to reverse are in [`docs/adr/`](./docs/adr/). The research behind the prescriptions, with primary sources, is in [`docs/research/`](./docs/research/).
 
 MIT licensed.
