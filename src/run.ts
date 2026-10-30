@@ -9,6 +9,8 @@ import { renderHtml } from './report/html.ts';
 import { renderDiff } from './report/diff.ts';
 import { parseTaskSet, templateTaskSet } from './taskset.ts';
 import { diffTaskSet } from './diff.ts';
+import { instructionBlock, mergeBlock, teach } from './teach.ts';
+import { renderTeach } from './report/teach.ts';
 
 export type Result = {
   exitCode: number;
@@ -57,6 +59,7 @@ async function dispatch(argv: string[], deps: Deps): Promise<Result> {
 
   if (command === 'audit') return runAudit(rest, deps);
   if (command === 'check') return runCheck(rest, deps);
+  if (command === 'teach') return runTeach(rest, deps);
   if (command === 'init') return runInit(rest, deps);
   if (command === 'diff') return runDiff(rest, deps);
 
@@ -147,6 +150,28 @@ async function runCheck(args: string[], deps: Deps): Promise<Result> {
   return { exitCode: 1, stdout: `${lines.join('\n')}\n`, stderr: '' };
 }
 
+async function parseFiles(
+  files: string[],
+  deps: Deps,
+): Promise<{ sessions: SessionSummary[]; records: number }> {
+  const sessions: SessionSummary[] = [];
+  let records = 0;
+
+  for (const file of files) {
+    let text: string;
+    try {
+      text = await deps.readText(file);
+    } catch {
+      continue;
+    }
+    const parsed = parseSession(text, basename(file, '.jsonl'));
+    records += parsed.records;
+    sessions.push(parsed.session);
+  }
+
+  return { sessions, records };
+}
+
 async function loadSessions(target: string, deps: Deps, all: boolean): Promise<Loaded> {
   const sessionFiles = all
     ? await walkSessions(target, deps)
@@ -156,24 +181,95 @@ async function loadSessions(target: string, deps: Deps, all: boolean): Promise<L
     return { ok: false, error: `ctxrent: no sessions found under ${target}` };
   }
 
-  const sessions: SessionSummary[] = [];
-  let records = 0;
-
-  for (const file of sessionFiles) {
-    let text: string;
-    try {
-      text = await deps.readText(file);
-    } catch {
-      continue;
-    }
-    const parsedSession = parseSession(text, basename(file, '.jsonl'));
-    records += parsedSession.records;
-    sessions.push(parsedSession.session);
-  }
-
+  const { sessions, records } = await parseFiles(sessionFiles, deps);
   if (records === 0) return { ok: false, error: `ctxrent: no readable sessions under ${target}` };
 
   return { ok: true, model: summariseSessions(sessions) };
+}
+
+async function runTeach(args: string[], deps: Deps): Promise<Result> {
+  const parsed = parseTeachArgs(args);
+  if (!parsed.ok) return failure(parsed.error);
+
+  const { target, write, minSessions } = parsed.options;
+
+  const files: string[] = [];
+  if (target === undefined) {
+    for (const root of await deps.defaultRoots()) files.push(...(await walkSessions(root, deps)));
+  } else {
+    files.push(...(await walkSessions(target, deps)));
+  }
+
+  if (files.length === 0) return failure('ctxrent: no sessions found');
+
+  const { sessions, records } = await parseFiles(files, deps);
+  if (records === 0) return failure('ctxrent: no readable sessions');
+
+  const model = summariseSessions(sessions);
+  const teachings = teach(sessions, { minSessions });
+  const block = instructionBlock(teachings, sessions.length);
+
+  let writePath: string | null = null;
+  if (write !== null) {
+    let existing: string | null = null;
+    try {
+      existing = await deps.readText(write);
+    } catch {
+      existing = null;
+    }
+    await deps.writeArtifact(write, mergeBlock(existing, block));
+    writePath = write;
+  }
+
+  return {
+    exitCode: 0,
+    stdout: renderTeach({
+      teachings,
+      sessionCount: sessions.length,
+      turns: model.totals.turns,
+      block,
+      writePath,
+    }),
+    stderr: '',
+  };
+}
+
+function parseTeachArgs(
+  args: string[],
+): { ok: true; options: { target: string | undefined; write: string | null; minSessions: number } } | { ok: false; error: string } {
+  const options = { target: undefined as string | undefined, write: null as string | null, minSessions: 3 };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] as string;
+
+    if (argument === '--write') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --write needs a file path' };
+      options.write = value;
+      index += 1;
+      continue;
+    }
+    if (argument === '--min-sessions') {
+      const value = args[index + 1];
+      if (value === undefined) return { ok: false, error: 'ctxrent: --min-sessions needs a number' };
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        return { ok: false, error: 'ctxrent: --min-sessions must be a positive integer' };
+      }
+      options.minSessions = parsed;
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith('-')) {
+      return { ok: false, error: `ctxrent: unknown option "${argument}"` };
+    }
+    if (options.target !== undefined) {
+      return { ok: false, error: `ctxrent: unexpected argument "${argument}"` };
+    }
+    options.target = argument;
+  }
+
+  return { ok: true, options };
 }
 
 async function runInit(args: string[], deps: Deps): Promise<Result> {

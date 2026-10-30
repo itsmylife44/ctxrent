@@ -17,6 +17,8 @@ npx ctxrent audit <session.jsonl> --json
 npx ctxrent audit <session.jsonl> --html report.html
 npx ctxrent audit ~/.claude/projects --all
 npx ctxrent check --max-waste 40               # gate: 0 ok, 1 over, 2 cannot measure
+npx ctxrent teach                              # what to write down, from every session
+npx ctxrent teach --write ~/.claude/CLAUDE.md  # apply it as a managed block
 ```
 
 Supported records: Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`). The adapter is detected from the file itself.
@@ -61,6 +63,24 @@ Advice is written as an instruction because you cannot stop an agent from runnin
 
 Every claim names the carrier and the turns that justify it. Rules that cannot be decided from the record are reported as unavailable, never as zero.
 
+## Teaching the agent, not just reporting
+
+`ctxrent teach` aggregates every session into rules with evidence, then writes only the ones that recurred. A rule that appeared once is an afternoon, not a habit.
+
+```
+  attachment-bloat      configuration  3,533 claims ·  3533 sessions · 3,138,375,885 token-turns
+  read-via-read-tool    instruction   10,897 claims ·  2300 sessions · 1,093,155,287 token-turns
+```
+
+It writes a **managed block**, delimited by `<!-- ctxrent:begin -->`, so re-running it replaces its own rules and leaves your text alone. It is a dry run unless you pass `--write`.
+
+The output separates two levers, because conflating them produces advice that cannot work:
+
+- **instruction** — a line for `CLAUDE.md` / `AGENTS.md`, because the agent can choose differently.
+- **configuration** — the record is dominated by something the agent does not control, such as an always-on attachment from a hook. Telling the agent about it does nothing; the fix is to turn the hook off or trim the skill listing.
+
+Then close the loop: apply the block, keep working, and run `ctxrent check` again. If waste does not fall, remove the rule — otherwise you have made a guess global.
+
 ## Comparing variants
 
 `ctxrent diff` runs two variants over the same declared task set and reports the delta in rent and in success rate, so a change to a skill or an instruction file is measured rather than felt. Aggregate reports list the highest-rent sessions and state how many were omitted: the top 20 in the terminal, the top 100 in the HTML.
@@ -92,7 +112,7 @@ The verifier's exit code is the only judge of success. Each run happens in a fre
 ## Development
 
 ```bash
-node --test test/*.test.ts      # 76 tests, no network, no real agents
+node --test test/*.test.ts      # 84 tests, no network, no real agents
 npx tsc --noEmit                # typecheck
 ```
 

@@ -90,7 +90,7 @@ function fromCarriers(input: PrescriptionInput): Prescription[] {
     .map((carrier) => ({
       id: 'attachment-bloat',
       saving: carrier.rent,
-      claims: carrier.injections,
+      claims: 1,
       advice:
         'Move fixed context into a file the agent reads on demand, not an always-on attachment.',
       example: `attachment · ${carrier.size.toLocaleString('en-US')} tokens × ${carrier.injections}`,

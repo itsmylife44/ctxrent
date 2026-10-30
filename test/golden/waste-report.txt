@@ -3,6 +3,18 @@ session fixture-waste
 
 rent 5,850 token-turns   score 56/100
 
+
+what to change
+  1. 1,800 token-turns · 1 claim(s)
+     Cap what a command prints: pipe it through head, or write it to a file and…
+     e.g. Grep x
+  2. 500 token-turns · 1 claim(s)
+     Read a file after editing it, or read only the section you are about to ch…
+     e.g. Read src/x.ts
+  3. 300 token-turns · 1 claim(s)
+     List a directory once, with a depth limit, instead of re-listing trees.
+     e.g. Bash ls
+
 top carriers
   Grep x                              2,400 rent     600 tok        t4–4
   Bash ls                             2,100 rent     800 tok     t5–6 ×2
@@ -17,14 +29,3 @@ waste 2,600 token-turns (44% of rent)
     Grep x — carrier never used again, 3 turns of rent left to pay
   retry-loop               300   1 claim(s)
     Bash ls — same carrier injected again within 2 turns
-
-what to change
-  1. 1,800 token-turns · 1 claim(s)
-     Cap what a command prints: pipe it through head, or write it to a file and…
-     e.g. Grep x
-  2. 500 token-turns · 1 claim(s)
-     Read a file after editing it, or read only the section you are about to ch…
-     e.g. Read src/x.ts
-  3. 300 token-turns · 1 claim(s)
-     List a directory once, with a depth limit, instead of re-listing trees.
-     e.g. Bash ls

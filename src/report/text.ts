@@ -26,6 +26,20 @@ function renderSession(session: SessionSummary): string {
   lines.push(`rent ${rentLabel(session.rent)}   score ${scoreLabel(session.rentScore)}/100`);
   lines.push('');
 
+  const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
+  if (advice.length > 0) {
+    lines.push('');
+    lines.push('what to change');
+    for (const [index, item] of advice.entries()) {
+      lines.push(
+        `  ${index + 1}. ${numbers.format(item.saving)} token-turns · ${item.claims} claim(s)`,
+      );
+      lines.push(truncate(`     ${item.advice}`, WIDTH));
+      lines.push(truncate(`     e.g. ${item.example}`, WIDTH));
+    }
+    lines.push('');
+  }
+
   lines.push('top carriers');
   if (session.carriers.length === 0) {
     lines.push('  none measurable');
@@ -50,19 +64,6 @@ function renderSession(session: SessionSummary): string {
   }
   if (session.wasteRent === null) lines.push('  unavailable: the record does not say enough to classify');
   else if (session.waste.length === 0) lines.push('  none');
-
-  const advice = prescribe({ claims: session.waste, carriers: session.carriers, rent: session.rent });
-  if (advice.length > 0) {
-    lines.push('');
-    lines.push('what to change');
-    for (const [index, item] of advice.entries()) {
-      lines.push(
-        `  ${index + 1}. ${numbers.format(item.saving)} token-turns · ${item.claims} claim(s)`,
-      );
-      lines.push(truncate(`     ${item.advice}`, WIDTH));
-      lines.push(truncate(`     e.g. ${item.example}`, WIDTH));
-    }
-  }
 
   if (session.skills !== null && session.skills.length > 0) {
     lines.push('');

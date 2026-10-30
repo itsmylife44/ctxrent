@@ -71,9 +71,9 @@ function hero(session: SessionSummary): string {
   <div><b>${value(session.wasteRent)}</b><span>token-turns of waste</span></div>
   <div><b>${session.turns.length}</b><span>turns</span></div>
 </section>
-${carriers(session)}
-${waste(session)}
 ${whatToChange(session)}
+${waste(session)}
+${carriers(session)}
 ${skills(session)}`;
 }
 
@@ -107,9 +107,10 @@ function waste(session: SessionSummary): string {
   const rows = WASTE_ORDER.flatMap((kind) =>
     session.waste
       .filter((claim) => claim.kind === kind)
+      .slice(0, 2)
       .map(
         (claim) => `<div class="row waste">
-      <span class="name">${escape(claim.carrier)}</span>
+      <span class="name">${escape(short(claim.carrier))}</span>
       <span class="bar"><i style="width:${Math.max(2, Math.round((100 * claim.rent) / max))}%"></i></span>
       <span class="val">${numbers.format(claim.rent)} waste</span>
     </div>
@@ -194,6 +195,10 @@ ${block(
 ${more}
 <p class="sub">coverage: ${model.totals.measuredSessions} sessions with usage, ${model.totals.unmeasuredSessions} without, ${model.totals.sessionsWithRent} with rent, ${numbers.format(model.totals.unknownInjections)} unmeasurable injections</p>`,
 )}`;
+}
+
+function short(text: string, limit = 72): string {
+  return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
 }
 
 function block(title: string, body: string): string {
