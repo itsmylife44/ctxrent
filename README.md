@@ -2,7 +2,7 @@
 
 Your coding agent pays rent on every token it keeps in context. `ctxrent` measures that rent, shows what caused it, and turns the worst habits into rules your agent reads before it starts.
 
-It runs on your machine. No outbound network, no telemetry, no runtime dependencies, no install step.
+It runs on your machine. The CLI makes no outbound network connection, sends no telemetry and has no runtime dependencies.
 
 ## The idea
 
@@ -16,32 +16,53 @@ That single equation explains why an early mistake costs many times a late one, 
 
 ## Quick start
 
+Install the skill, then ask your agent for it. That is the whole setup.
+
+```bash
+npx skills add itsmylife44/ctxrent -g
+```
+
+Then, inside Claude Code:
+
+```
+/ctxrent
+```
+
+The agent does the rest on its own:
+
+1. runs the CLI — from your `PATH` if you installed it, otherwise straight from the GitHub release through `npx`, with nothing installed;
+2. measures every session on disk and keeps the habits that recur;
+3. writes one rule per habit from that evidence;
+4. opens the review page on `127.0.0.1`, where you tick what stays and press Apply.
+
+Nothing reaches your `CLAUDE.md` / `AGENTS.md` before you press Apply. You need Node 20 or newer.
+
+The skill follows the [Agent Skills](https://agentskills.io) specification, so the same install works in Codex, Cursor, Gemini CLI and the other agents `skills` supports; there, ask for it in words ("where do my tokens go?"). `--agent claude-code` installs for one agent only; `ctxrent skill` prints the file if you would rather place it yourself.
+
+## Use the CLI directly
+
+Everything the skill does is a plain command, so you can also run it yourself. From the release, with no install:
+
+```bash
+npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz ctxrent --help
+```
+
+Or put it on your `PATH`:
+
+```bash
+npm i -g https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz
+ctxrent                   # the session you just finished, then the page you apply from
+```
+
+From a clone, the TypeScript source runs directly on Node 22.18 or newer:
+
 ```bash
 git clone https://github.com/itsmylife44/ctxrent
 cd ctxrent
-./src/cli.ts              # the session you just finished, then the page you apply from
-```
-
-To run it from the clone you need nothing but Node 22.18 or newer: the TypeScript source runs directly.
-
-```bash
 node src/cli.ts --help
 ```
 
-To put the command on your PATH, build the package once and install it globally:
-
-```bash
-npm install
-npm run build
-npm install -g .
-ctxrent --help
-```
-
-The build is an explicit step, not a lifecycle hook: npm 11 blocks package scripts by default and a `prepare` hook would be skipped anyway. The published package ships the compiled output, so the build is only needed for a local clone.
-
-The same three commands work on Windows PowerShell; there are no symlinks and no `sh` involved.
-
-Windows records live in `%USERPROFILE%\.claude\projects` and `%USERPROFILE%\.codex\sessions`. The compiled package runs on Node 20 or newer; developing from source needs 22.18, because the tests import the TypeScript directly. Where `ctxrent diff` runs a command, it uses `cmd.exe` on Windows and `sh` everywhere else.
+Windows records live in `%USERPROFILE%\.claude\projects` and `%USERPROFILE%\.codex\sessions`. Where `ctxrent diff` runs a command, it uses `cmd.exe` on Windows and `sh` everywhere else.
 
 ## What it looks like
 
@@ -80,7 +101,7 @@ waste 2,600 token-turns (44% of rent)
     Bash ls — same carrier injected again within 2 turns
 ```
 
-In a terminal, `ctxrent` on its own prints the text report and then opens the **review page**: served only on loopback, it shows the rules already in your file first, then the new ones, each with its evidence, and applies only what stays ticked. That is the whole flow — no file path, no second command, and nothing removed unless you untick it.
+In a terminal, `ctxrent` on its own prints the text report, then asks before handing the recurring patterns to `claude` to write rules — they contain commands and paths from your sessions. Say yes and it opens the **review page**: served only on loopback, it shows the rules already in your file first, then the new ones, each with its evidence, and applies only what stays ticked. That is the whole flow — no file path, no second command, and nothing removed unless you untick it.
 
 `--html` writes the static report instead, for sharing and for keeping:
 
@@ -126,19 +147,11 @@ A pattern that comes from always-on context — an attachment re-injected every 
 
 ### The flow, with your agent
 
-The skill teaches your agent the protocol; the CLI is called by the agent, never the other way round.
-
-```bash
-npx skills add itsmylife44/ctxrent --agent claude-code -g   # installs to ~/.claude/skills/ctxrent
-```
-
-From a local clone, `npx skills add . --agent claude-code -g`. The skill follows the [Agent Skills](https://agentskills.io) specification, so the same install works for Codex, Cursor, Gemini CLI and the rest of the agents `skills` supports; `ctxrent skill` prints the file if you would rather place it yourself.
-
-Then, inside a session, you ask for it and the agent does the work:
+This is what `/ctxrent` runs (see [Quick start](#quick-start)). The skill teaches your agent the protocol; the CLI is called by the agent, never the other way round:
 
 1. `ctxrent findings --json` — the evidence, with ids, labels, numbers and the commands that caused them
-2. the agent writes `.ctxrent/rules.md`, one line per finding: `- <rule> <!-- id: <finding id> -->`
-3. `ctxrent review --rules .ctxrent/rules.md` — the page opens, you tick what stays, you press Apply
+2. the agent writes a rules file outside your project, one line per finding: `- <rule> <!-- id: <finding id> -->`
+3. `ctxrent review --rules <file> --write <target>` — the page opens, you tick what stays, you press Apply
 
 The agent writes with the whole session in front of it, which is why this is the flow that produces the best rules. Nothing is written until you approve, and `ctxrent` drops any line whose id it does not recognise.
 
@@ -176,7 +189,7 @@ Within the block, an update **composes** with what is there: a rule you approved
 ctxrent review
 ```
 
-Opens a page served only on `127.0.0.1`, with a real form: each rule is a checkbox showing its evidence and the command that caused it, the target file is editable, and applying there writes the block. No JavaScript — the page works with scripting off. The server requires a single-use token in the path, answers one `POST`, and closes; it also closes by itself after ten minutes.
+Opens a page served only on `127.0.0.1`, with a real form: each rule is a checkbox showing its evidence and the command that caused it, the target file is shown (`--write <file>` picks it; the page cannot change it), and applying there writes the block. No JavaScript — the page works with scripting off. The server requires a single-use token in the path, answers one `POST`, and closes; it also closes by itself after ten minutes.
 
 ## Put a gate on it
 
@@ -186,7 +199,7 @@ ctxrent check ~/.claude/projects --all           # the whole archive
 ctxrent check --all --since 2026-10-30           # only sessions after that date
 ```
 
-Exit `0` under the threshold, `1` over it (printing the rules that would have helped), `2` when the record cannot be measured. Missing data never passes silently. This is the shape `eslint --max-warnings` and Lighthouse CI use, so it drops into a nightly job or a hook without a new vocabulary:
+Exit `0` under the threshold, `1` over it (printing the rules that would have helped), `2` for anything that is not a verdict: no sessions, a record that cannot be measured, a bad flag. Missing data never passes silently. This is the shape `eslint --max-warnings` and Lighthouse CI use, so it drops into a nightly job or a hook without a new vocabulary:
 
 ```bash
 # every night, on the machine where the work happens
@@ -237,11 +250,11 @@ One Windows caveat: a prompt handed to an agent runner goes through `cmd.exe`, w
 
 ## What it reads
 
-Claude Code (`~/.claude/projects/*.jsonl`, `%USERPROFILE%\.claude\projects` on Windows) and Codex (`~/.codex/sessions/**/*.jsonl`). The adapter is detected from the file itself, and coverage is reported per adapter. Session directories are opened read-only.
+Claude Code (`~/.claude/projects/*.jsonl`, `%USERPROFILE%\.claude\projects` on Windows) and Codex (`~/.codex/sessions/**/*.jsonl`). The adapter is detected from the file itself. Subagent transcripts (`<session>/subagents/`) belong to their session and are not counted on their own. Session directories are opened read-only.
 
 ## Privacy
 
-- No outbound network, ever. The only socket is the loopback review page, bound to `127.0.0.1` on an ephemeral port.
+- The CLI makes no outbound network connection, ever. The only socket is the loopback review page, bound to `127.0.0.1` on an ephemeral port. The one download is the skill fetching the CLI from the GitHub release through `npx` when `ctxrent` is not on your `PATH`; install it and that goes away too.
 - No telemetry, no account, no upload.
 - No runtime dependencies: what you clone is what runs.
 - Nothing is written unless you ask: `--html` writes the report you named, `teach --write` and `review` write the block you approved.
@@ -275,7 +288,7 @@ src/run.ts      the command surface
 
 ```bash
 npm install          # dev dependencies only: typescript, @types/node
-npm test             # 118 tests, runs the TypeScript source, Node 22.18+
+npm test             # the suite, runs the TypeScript source, Node 22.18+
 npm run typecheck
 ```
 
@@ -288,20 +301,9 @@ npm version patch        # or minor, or major: writes package.json and creates v
 git push --follow-tags
 ```
 
-The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, and publishes to npm with provenance.
+`npm version` also points the skill at the release the new tag creates (`scripts/version.js`), and a test fails if the two ever disagree: the skill runs the CLI from that release, so a stale URL would ship an old CLI to every `/ctxrent`.
 
-On the same tag, the workflow also creates a GitHub release with the packed tarball attached, so the CLI can be installed straight from GitHub:
-
-```bash
-npm i -g https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz
-# or, with no npm at all: extract the asset and run
-node package/dist/cli.js
-```
-
-One-time setup before the first release:
-
-- set `repository` in `package.json` (provenance will not publish without it);
-- add `NPM_TOKEN` as a repository secret: an npm automation token with publish rights.
+The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, and creates a GitHub release with the packed tarball attached — the file the skill runs. It then publishes to npm with provenance, if an `NPM_TOKEN` repository secret is set; without it, the release is the only channel.
 
 ## Design
 

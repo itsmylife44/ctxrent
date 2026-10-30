@@ -33,6 +33,6 @@ test('skill prints the protocol an agent needs', async () => {
 
   assert.equal(result.exitCode, 0);
   assert.match(result.stdout, /ctxrent findings --json/);
-  assert.match(result.stdout, /ctxrent review --rules \.ctxrent\/rules\.md/);
+  assert.match(result.stdout, /ctxrent review --rules <rules file> --write <target>/);
   assert.match(result.stdout, /<!-- id: <finding id> -->/);
 });

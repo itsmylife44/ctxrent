@@ -58,3 +58,14 @@ test('ctxrent skill prints the bundled file, so there is one copy', async () => 
   assert.equal(result.exitCode, 0);
   assert.equal(result.stdout, text);
 });
+
+test('the skill runs the release of the version it ships with', () => {
+  const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+  const urls = text.match(/releases\/download\/v[^/\s]+\/ctxrent-[^\s]+\.tgz/g) ?? [];
+
+  assert.ok(urls.length > 0, 'the skill must name the release it runs');
+  for (const url of urls) {
+    assert.equal(url, `releases/download/v${version}/ctxrent-${version}.tgz`);
+  }
+  assert.match(text, new RegExp(`version: "${version.replaceAll('.', '\\.')}"`));
+});

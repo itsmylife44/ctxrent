@@ -1,64 +1,95 @@
 ---
 name: ctxrent
-description: Measures the context rent of a coding agent's sessions and turns that evidence into rules for CLAUDE.md or AGENTS.md. Use when the user asks where their tokens go, why a session was slow or expensive, how to reduce context, or wants hygiene rules written from their own session history.
+description: Context rent of the user's coding-agent sessions, turned into approved rules for CLAUDE.md or AGENTS.md. Use when the user runs /ctxrent, asks where their tokens or context go, why sessions are slow or expensive, or wants hygiene rules from their own session history.
 license: MIT
-compatibility: Requires the ctxrent CLI on PATH and Node 20 or newer. Reads Claude Code and Codex session records from the user's home directory.
+compatibility: Node 20 or newer. Reads Claude Code and Codex session records under the user's home directory. Runs the ctxrent CLI from PATH, or from its GitHub release through npx when it is not installed.
 metadata:
-  version: "0.1"
+  version: "0.1.0"
   category: developer-tools
-allowed-tools: Bash(ctxrent *)
+allowed-tools: Bash(ctxrent *) Bash(npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/* ctxrent *)
 ---
 
 # ctxrent
 
-Every token kept in a context is re-sent on each request, so content costs its size multiplied by
-the turns it survives. `ctxrent` measures that, and produces findings. You write the rules; the
-tool never writes the words.
+Content kept in a context is re-sent on every request, so it costs its size times the turns it
+survives: its rent. `ctxrent` measures rent and returns findings. You turn the findings into rules;
+the user approves them on a page. Run the whole flow yourself, start to finish; the only thing the
+user does is tick and press Apply.
 
-## Flow
+If the user asked for something narrower (a gate, a shareable report, a comparison), skip to
+[Other requests](#other-requests).
 
-1. Run the analysis and read the findings as JSON:
+## 1. Get the command
 
-   ```bash
-   ctxrent findings --json
-   ```
+If `ctxrent --help` succeeds, the command is `ctxrent`. Otherwise it is:
 
-   Useful: `--since <date>` for recent sessions only, `--min-sessions <n>` (default 3), or a path as
-   the first argument to narrow the scope.
+```bash
+npx -y --package=https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz ctxrent
+```
 
-   Each finding has `id`, `label` (what was observed, as data), `lever`, `saving` (token-turns),
-   `claims`, `sessions`, and `example` (the real command that caused it).
+That runs the released CLI without installing anything. Below, `ctxrent` means whichever one works.
 
-2. Write one rule per finding whose `lever` is `instruction`. Skip `configuration` findings: no
-   instruction can change them, and writing one adds noise.
+Done when `ctxrent --help` prints the usage.
 
-   Put them in `.ctxrent/rules.md`, one per line, exactly in this form:
+## 2. Measure
 
-   ```
-   - <the rule> <!-- id: <finding id> -->
-   ```
+```bash
+ctxrent findings --json
+```
 
-   Constraints: imperative, addressed to the agent, at most 20 words, in the language the user
-   writes in, one line per finding, nothing else in the file. Use `label`, `example` and the
-   numbers to decide what the rule says.
+Narrow it if the user asked: `--since <date>`, a session path as the first argument,
+`--min-sessions <n>` (default 3).
 
-3. Ask the user to approve, by running:
+Each finding has `id`, `label` (what was observed, as data), `lever`, `saving` (token-turns),
+`claims`, `sessions` and `example` (the real command that caused it).
 
-   ```bash
-   ctxrent review --rules .ctxrent/rules.md
-   ```
+If `findings` is empty, run `ctxrent` alone, show the user the last session's rent, score and top
+carriers, and stop: there is nothing recurring to write a rule for.
 
-   That opens a page on loopback with the rules you wrote, the ones already in the file, and the
-   configuration findings. The user ticks what stays and presses Apply.
+Done when you hold the JSON.
 
-## Rules for you
+## 3. Write the rules
 
-- Never edit the instruction file yourself: the approval page is the only writer.
-- If you are not confident about a rule, leave the finding out. A missing rule beats a wrong one.
-- Do not invent ids. `ctxrent` drops unrecognised lines and tells the user how many it kept.
+One rule per finding whose `lever` is `instruction`. A `configuration` finding gets no rule: it is
+caused by a hook or a setting, and the page shows it to the user as such.
 
-## Related commands
+Write them to `ctxrent-rules.md` in the system temp directory, outside the user's project, one per
+line, exactly:
 
-- `ctxrent` — the session just finished, as text.
-- `ctxrent check --all --since <date>` — the gate: 0 under the threshold, 1 over, 2 unmeasurable.
-- `ctxrent audit <path> --html [file]` — a shareable, self-contained report.
+```
+- <the rule> <!-- id: <finding id> -->
+```
+
+Each rule is imperative, addressed to the agent, at most 20 words, in the language the user writes
+in. Decide what it says from `label`, `example` and the numbers. Leave a finding out when you are
+not confident about its rule: a missing rule beats a wrong one. Copy ids from the JSON only;
+`ctxrent` drops any line whose id it does not know.
+
+Done when every `instruction` finding has one line or was left out on purpose, and the file holds
+nothing else.
+
+## 4. Get approval
+
+The target is the global instruction file of the harness you run in: `~/.claude/CLAUDE.md` for
+Claude Code, `~/.codex/AGENTS.md` for Codex, or the file the user named.
+
+```bash
+ctxrent review --rules <rules file> --write <target>
+```
+
+It prints a loopback URL, opens the browser, and waits up to ten minutes for the user to press
+Apply. Run it in the background or with a timeout of at least ten minutes, because a shorter
+timeout kills the page. As soon as the URL is printed, give it to the user with one line per
+finding: the amount, the example, and for `configuration` findings the hook or setting to turn off.
+
+The page is the only writer of the instruction file. Your edits stop at the rules file.
+
+Done when the command exits. Report its last line: `applied N rule(s) to <file>`, or
+`closed without changes`.
+
+## Other requests
+
+- A gate: `ctxrent check --max-waste <n>`, or `--all --since <date>` for the archive. Exit 0 under
+  the threshold, 1 over, 2 when the record cannot be measured.
+- A shareable report: `ctxrent audit <path> --html <file>`, one self-contained file.
+- A comparison of two variants: `ctxrent init`, then `ctxrent diff ctxrent.json --a <dir> --b <dir>`.
