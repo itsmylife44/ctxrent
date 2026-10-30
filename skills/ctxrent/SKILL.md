@@ -4,7 +4,7 @@ description: Context rent of the user's coding-agent sessions, turned into appro
 license: MIT
 compatibility: Node 20 or newer. Reads Claude Code and Codex session records under the user's home directory. Runs the ctxrent CLI from PATH, or the latest release from npm through npx when it is not installed.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
   category: developer-tools
 allowed-tools: Bash(ctxrent *) Bash(npx -y ctxrent@latest *)
 ---
