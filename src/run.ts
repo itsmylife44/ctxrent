@@ -84,6 +84,7 @@ Usage
   ctxrent check [path]           exit 0 under the threshold, 1 over, 2 cannot measure
       --max-waste <pct>          threshold, default 40
       --all                      walk the path recursively
+      --since <date>             only sessions modified since then
       --json                     print the assertion as JSON
   ctxrent teach [path]           rules with evidence, dry run by default
       --write <file>             show the change, ask, then apply the managed block

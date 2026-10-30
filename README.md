@@ -37,7 +37,7 @@ npm install -g .
 ctxrent --help
 ```
 
-The build step is explicit because npm 11 blocks lifecycle scripts by default, so `prepare` does not run on its own. The published package ships the compiled output and needs none of this.
+The build is an explicit step, not a lifecycle hook: npm 11 blocks package scripts by default and a `prepare` hook would be skipped anyway. The published package ships the compiled output, so the build is only needed for a local clone.
 
 The same three commands work on Windows PowerShell; there are no symlinks and no `sh` involved.
 
@@ -72,7 +72,7 @@ waste 2,600 token-turns (44% of rent)
   retry-loop               300   1 claim(s)
 ```
 
-In a terminal, `ctxrent` on its own prints the text report and then opens the **review page**: served only on loopback, it lists the rules with their evidence, lets you untick what you do not want, and applies the rest. That is the whole flow — no file path, no second command.
+In a terminal, `ctxrent` on its own prints the text report and then opens the **review page**: served only on loopback, it shows the rules already in your file first, then the new ones, each with its evidence, and applies only what stays ticked. That is the whole flow — no file path, no second command, and nothing removed unless you untick it.
 
 `--html` writes the static report instead, for sharing and for keeping:
 
@@ -191,7 +191,7 @@ Both variants run over the same tasks, each run in a fresh copy of its directory
 | Linux | same as macOS, browser through `xdg-open` |
 | Windows | package install, commands through `cmd.exe`, runner lookup through `where`, reports opened with `explorer` and URLs with `rundll32` |
 
-CI runs the full suite on Ubuntu, macOS and Windows, and on each of them installs the packed tarball on Node 20 and runs the binary. The platform branches (`sh` vs `cmd.exe`, `open` vs `xdg-open` vs `start`, `command -v` vs `where`) are pure functions with unit tests for all three.
+CI runs the full suite on Ubuntu, macOS and Windows, and on each of them installs the packed tarball on Node 20 and runs the binary. The platform branches (`sh` vs `cmd.exe`, `open` and `xdg-open` vs `explorer` and `rundll32`, `command -v` vs `where`) are pure functions with unit tests for all three.
 
 One Windows caveat: a prompt handed to an agent runner goes through `cmd.exe`, where `%NAME%` expands even inside quotes. Avoid `%` in task-set prompts there.
 
@@ -225,6 +225,7 @@ src/epochs.ts   where a context compaction ends the rent
 src/rent.ts     token-turns per carrier
 src/waste.ts    the four classes
 src/prescriptions.ts, src/teach.ts   advice, evidence, managed block
+src/report/     text, html, review page, diff output
 src/review.ts   the loopback review server
 src/run.ts      the command surface
 ```
@@ -233,7 +234,7 @@ src/run.ts      the command surface
 
 ```bash
 npm install          # dev dependencies only: typescript, @types/node
-npm test             # 95 tests, runs the TypeScript source, Node 22.18+
+npm test             # 114 tests, runs the TypeScript source, Node 22.18+
 npm run typecheck
 ```
 
