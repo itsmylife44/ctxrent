@@ -1,6 +1,6 @@
 {
   "name": "ctxrent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Measure the context rent of coding-agent sessions and compare variants fairly",
   "license": "MIT",
