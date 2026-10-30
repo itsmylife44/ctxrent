@@ -170,3 +170,27 @@ test('a failing runner is reported, not turned into an empty block', async () =>
   assert.equal(result.exitCode, 1);
   assert.match(result.stderr, /not available|no usable rule/);
 });
+
+test('an old block without ids does not collect a second copy of each rule', () => {
+  const legacyOnly = [
+    '<!-- ctxrent:begin -->',
+    '- Read files with the Read tool (offset/limit), never by piping them through Bash.',
+    '- My own rule.',
+    '<!-- ctxrent:end -->',
+  ].join('\n');
+  assert.deepEqual(readManagedRules(legacyOnly), [
+    { id: 'read-via-read-tool', advice: 'Read files with the Read tool (offset/limit), never by piping them through Bash.' },
+    { id: null, advice: 'My own rule.' },
+  ]);
+
+  // The block a Windows run produced: the old sentence, then the agent's version with its id.
+  const duplicated = [
+    '<!-- ctxrent:begin -->',
+    '- Read files with the Read tool (offset/limit), never by piping them through Bash.',
+    '- Read files with the Read tool, never through cat in Bash. <!-- id: read-via-read-tool -->',
+    '<!-- ctxrent:end -->',
+  ].join('\n');
+  assert.deepEqual(readManagedRules(duplicated), [
+    { id: 'read-via-read-tool', advice: 'Read files with the Read tool, never through cat in Bash.' },
+  ]);
+});

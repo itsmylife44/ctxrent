@@ -233,3 +233,16 @@ test('review --rules refuses a file with no usable rule', async () => {
   assert.equal(result.exitCode, 1);
   assert.match(result.stderr, /no usable rule/);
 });
+
+test('a proposed rule whose finding is already in the file is not offered as new', () => {
+  const page = renderReview({
+    token: 'tok',
+    model: { sessions: [], totals: { turns: 0 } } as never,
+    target: '/tmp/CLAUDE.md',
+    existingRules: [{ id: 'read-via-read-tool', advice: 'Old wording.' }],
+    rules: [{ id: 'read-via-read-tool', advice: 'New wording.' }],
+    configuration: [],
+  });
+
+  assert.ok(!page.includes('New wording.'));
+});

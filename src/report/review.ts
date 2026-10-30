@@ -16,8 +16,9 @@ export type ReviewPage = {
 
 export function renderReview(input: ReviewPage): string {
   const { model, target, token, existingRules, rules, configuration } = input;
-  const alreadyThere = new Set(existingRules.map((rule) => rule.advice));
-  const fresh = rules.filter((rule) => !alreadyThere.has(rule.advice));
+  // A finding already in the file keeps the wording there; only findings it lacks are new.
+  const alreadyThere = new Set(existingRules.map((rule) => rule.id ?? rule.advice));
+  const fresh = rules.filter((rule) => !alreadyThere.has(rule.id ?? rule.advice));
 
   const top = model.sessions
     .flatMap((session) => session.carriers)
