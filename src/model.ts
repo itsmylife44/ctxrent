@@ -104,6 +104,8 @@ export type AuditModel = {
     rent: number | null;
     rentScore: number | null;
     wasteRent: number | null;
+    /** Rent of the sessions whose waste could be judged: the only fair denominator for waste. */
+    assessedRent: number | null;
     measuredSessions: number;
     unmeasuredSessions: number;
     sessionsWithRent: number;
@@ -139,6 +141,7 @@ export function summariseSessions(sessions: SessionSummary[]): AuditModel {
   let unknownInjections = 0;
   let rent = 0;
   let wasteRent = 0;
+  let assessedRent = 0;
   let sessionsWithRent = 0;
   let assessedSessions = 0;
 
@@ -151,6 +154,7 @@ export function summariseSessions(sessions: SessionSummary[]): AuditModel {
       sessionsWithRent += 1;
       if (session.wasteRent !== null) {
         wasteRent += session.wasteRent;
+        assessedRent += session.rent;
         assessedSessions += 1;
       }
     }
@@ -167,8 +171,9 @@ export function summariseSessions(sessions: SessionSummary[]): AuditModel {
       injectedTokens,
       unknownInjections,
       rent: sessionsWithRent === 0 ? null : rent,
-      rentScore: scoreOf(sessionsWithRent === 0 ? null : rent, assessedSessions === 0 ? null : wasteRent),
+      rentScore: scoreOf(assessedSessions === 0 ? null : assessedRent, assessedSessions === 0 ? null : wasteRent),
       wasteRent: assessedSessions === 0 ? null : wasteRent,
+      assessedRent: assessedSessions === 0 ? null : assessedRent,
       measuredSessions,
       unmeasuredSessions: sessions.length - measuredSessions,
       sessionsWithRent,

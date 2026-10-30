@@ -43,6 +43,6 @@ test('check emits the assertion shape in json', async () => {
 test('check rejects a threshold outside 0..100', async () => {
   const result = await run(['check', waste, '--max-waste', '140'], nodeDeps);
 
-  assert.equal(result.exitCode, 1);
+  assert.equal(result.exitCode, 2, 'a bad flag is not a verdict');
   assert.match(result.stderr, /between 0 and 100/);
 });

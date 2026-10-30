@@ -25,12 +25,12 @@ export function classifyWaste(turns: Turn[]): WasteClaim[] {
   const ends = epochEnds(turns);
   const entries = placed(turns, ends);
 
-  const writeTurns = firstWriteTurns(turns);
+  const writeTurns = writeTurnsByPath(turns);
 
   for (const { injection, turn, epochEnd } of entries) {
     if (injection.kind !== 'file-read' || injection.path === null) continue;
-    const writeTurn = writeTurns.get(injection.path);
-    if (writeTurn === undefined || writeTurn < turn) continue;
+    const writeTurn = writeTurns.get(injection.path)?.find((index) => index >= turn);
+    if (writeTurn === undefined) continue;
 
     const wasted = wastedAfter(injection, epochEnd, writeTurn);
     if (wasted <= 0) continue;
@@ -100,7 +100,7 @@ export function classifyWaste(turns: Turn[]): WasteClaim[] {
   for (const { injection, turn, epochEnd } of entries) {
     if (claimed.has(injection) || injection.size === null) continue;
     if (injection.kind !== 'tool-result') continue;
-    if (injection.size < DEAD_PAYLOAD_MIN_SIZE) continue;
+    if (injection.size <= DEAD_PAYLOAD_MIN_SIZE) continue;
     if ((occurrences.get(keyOf(injection)) ?? 0) > 1) continue;
     if (epochEnd - turn < DEAD_PAYLOAD_MIN_AGE) continue;
 
@@ -125,14 +125,15 @@ function isSpecific(carrier: string): boolean {
   return carrier.includes(' ');
 }
 
-function firstWriteTurns(turns: Turn[]): Map<string, number> {
-  const writes = new Map<string, number>();
+/** Every turn that wrote each path, in order: a read is superseded by the first write after it. */
+function writeTurnsByPath(turns: Turn[]): Map<string, number[]> {
+  const writes = new Map<string, number[]>();
   for (const turn of turns) {
     for (const call of turn.toolCalls) {
       if (!WRITE_TOOLS.has(call.name)) continue;
       const path = call.input?.['file_path'];
       if (typeof path !== 'string') continue;
-      if (!writes.has(path)) writes.set(path, turn.index);
+      writes.set(path, [...(writes.get(path) ?? []), turn.index]);
     }
   }
   return writes;

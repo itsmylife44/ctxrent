@@ -13,6 +13,19 @@ function isCompaction(previous: number | null, current: number | null): boolean 
   return (previous - current) / previous >= MIN_DROP_SHARE;
 }
 
+/** Indexes where a compaction starts a new epoch. A turn with no usable prompt size is skipped. */
+function compactionStarts(turns: Turn[]): number[] {
+  const starts: number[] = [];
+  let previous: number | null = null;
+
+  for (const [index, turn] of turns.entries()) {
+    const current = turn.contextTokens ?? null;
+    if (index > 0 && isCompaction(previous, current)) starts.push(index);
+    if (current !== null && current > 0) previous = current;
+  }
+  return starts;
+}
+
 /**
  * A context epoch runs from one compaction to the next. Content injected in an epoch stops paying
  * rent when that epoch ends, because the record shows the context shrinking — the content is gone.
@@ -25,11 +38,7 @@ export function epochEnds(turns: Turn[]): number[] {
   const last = turns[turns.length - 1] as Turn;
   let start = 0;
 
-  for (let index = 1; index < turns.length; index += 1) {
-    const previous = turns[index - 1]?.contextTokens ?? null;
-    const current = turns[index]?.contextTokens ?? null;
-    if (!isCompaction(previous, current)) continue;
-
+  for (const index of compactionStarts(turns)) {
     const boundary = (turns[index - 1] as Turn).index;
     for (let fill = start; fill < index; fill += 1) ends[fill] = boundary;
     start = index;
@@ -42,10 +51,6 @@ export function epochEnds(turns: Turn[]): number[] {
 /** Index into `turns` where the last context epoch starts. */
 export function lastEpochStart(turns: Turn[]): number {
   let start = 0;
-  for (let index = 1; index < turns.length; index += 1) {
-    const previous = turns[index - 1]?.contextTokens ?? null;
-    const current = turns[index]?.contextTokens ?? null;
-    if (isCompaction(previous, current)) start = index;
-  }
+  for (const index of compactionStarts(turns)) start = index;
   return start;
 }
