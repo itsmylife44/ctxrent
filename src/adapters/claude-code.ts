@@ -47,7 +47,7 @@ export function parseClaudeCodeSession(text: string, fallbackId: string): ParseR
     }
     records += 1;
 
-    if (record.sessionId) sessionId = record.sessionId;
+    if (typeof record.sessionId === 'string' && record.sessionId !== '') sessionId = record.sessionId;
 
     if (record.type === 'assistant') {
       const message = record.message;

@@ -181,6 +181,12 @@ test('with no arguments a terminal opens the page you can apply from', async () 
     notify(message: string) {
       notified.push(message);
     },
+    async defaultInstructionFile() {
+      return 'AGENTS.md';
+    },
+    async confirm() {
+      return true;
+    },
   };
 
   const result = await run([], deps);
@@ -209,4 +215,51 @@ test('with no arguments and no terminal, no file is written', async () => {
 
   assert.equal(result.exitCode, 0);
   assert.equal(written.length, 0);
+});
+
+test('with no arguments, session evidence reaches an agent only after the user says yes', async () => {
+  let spawned = false;
+  let asked = '';
+  let shown = '';
+
+  const deps = {
+    ...nodeDeps,
+    interactive: true,
+    async defaultRoots() {
+      return ['root'];
+    },
+    async kind(path: string) {
+      return path === 'root' ? ('directory' as const) : ('file' as const);
+    },
+    async listDir() {
+      return ['a.jsonl', 'b.jsonl', 'c.jsonl'];
+    },
+    async modifiedAt() {
+      return Date.now();
+    },
+    async readText() {
+      return withWaste;
+    },
+    async execFile() {
+      spawned = true;
+      return { code: 0, stdout: '', stderr: '' };
+    },
+    async openUrl() {
+      throw new Error('the page must not open without consent');
+    },
+    async confirm(question: string) {
+      asked = question;
+      return false;
+    },
+    notify(message: string) {
+      shown += message;
+    },
+  };
+
+  const result = await run([], deps);
+
+  assert.equal(result.exitCode, 0);
+  assert.match(asked, /claude/);
+  assert.equal(spawned, false);
+  assert.match(shown, /session s/);
 });

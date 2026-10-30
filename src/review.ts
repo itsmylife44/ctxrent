@@ -54,10 +54,14 @@ export async function startReview(input: ReviewInput): Promise<ReviewServer> {
     finish = resolve;
   });
 
+  let applied = false;
   const server: Server = createServer((request, response) => {
     void handle(request, response, token, input, () => {
+      if (applied) return false;
+      applied = true;
       finish();
       setTimeout(() => server.close(), 200);
+      return true;
     });
   });
   server.on('close', () => finish());
@@ -92,7 +96,7 @@ async function handle(
   response: ServerResponse,
   token: string,
   input: ReviewInput,
-  scheduleClose: () => void,
+  claim: () => boolean,
 ): Promise<void> {
   const url = request.url ?? '/';
   const path = url.split('?')[0] ?? '/';
@@ -120,10 +124,21 @@ async function handle(
       return;
     }
 
-    const page = await input.onApply(rules, keep, target);
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    response.end(page);
-    scheduleClose();
+    // One apply per page: a second POST in the moment before the server closes writes nothing.
+    if (!claim()) {
+      response.writeHead(409, { 'content-type': 'text/plain; charset=utf-8' });
+      response.end('already applied\n');
+      return;
+    }
+
+    try {
+      const page = await input.onApply(rules, keep, target);
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(page);
+    } catch (error) {
+      response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+      response.end(`could not apply: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
     return;
   }
 

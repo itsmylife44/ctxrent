@@ -122,6 +122,13 @@ async function dispatch(argv: string[], deps: Deps): Promise<Result> {
     return { exitCode: 0, stdout: USAGE, stderr: '' };
   }
 
+  // `ctxrent --html` is the latest session with a flag, as the README promises.
+  if (command?.startsWith('-')) {
+    const file = await latestSessionFile(deps);
+    if (file === null) return failure('ctxrent: no sessions found');
+    return runAudit([file, ...argv], deps);
+  }
+
   if (command === 'audit') return runAudit(rest, deps);
   if (command === 'check') return runCheck(rest, deps);
   if (command === 'teach') return runTeach(rest, deps);
@@ -142,11 +149,17 @@ async function runLatest(deps: Deps): Promise<Result> {
   const result = await runAudit([file], deps);
   if (!deps.interactive || result.exitCode !== 0) return result;
 
+  // The next step sends commands and paths from the user's sessions to a model: ask first.
+  deps.notify(result.stdout);
+  const consent = await deps.confirm(
+    '\nHand the recurring patterns to claude to write rules, then open the review page? [y/N] ',
+  );
+  if (!consent) return { ...result, stdout: '' };
+
   // Where a person is waiting, the useful surface is the page you can act on, not a file on disk.
   const recent = await recentFiles(deps, RECENT_DAYS);
   const files = recent.length >= MIN_SESSIONS ? recent : await allFiles(deps);
 
-  deps.notify(result.stdout);
   deps.notify('\n');
 
   return openReview(
@@ -222,7 +235,7 @@ async function runAudit(args: string[], deps: Deps): Promise<Result> {
  */
 async function runCheck(args: string[], deps: Deps): Promise<Result> {
   const parsed = parseCheckArgs(args);
-  if (!parsed.ok) return failure(parsed.error);
+  if (!parsed.ok) return unmeasurable(parsed.error);
 
   const { maxWaste, json, all, since } = parsed.options;
 
@@ -231,13 +244,13 @@ async function runCheck(args: string[], deps: Deps): Promise<Result> {
     loaded = await loadFromRoots(await deps.defaultRoots(), deps, since);
   } else {
     const target = parsed.options.target ?? (await latestSessionFile(deps));
-    if (target === null) return failure('ctxrent: no sessions found');
+    if (target === null) return unmeasurable('ctxrent: no sessions found');
     loaded = await loadSessions(target, deps, all, since);
   }
-  if (!loaded.ok) return failure(loaded.error);
+  if (!loaded.ok) return unmeasurable(loaded.error);
 
-  const { rent, wasteRent } = loaded.model.totals;
-  if (rent === null || wasteRent === null) {
+  const { assessedRent: rent, wasteRent } = loaded.model.totals;
+  if (rent === null || wasteRent === null || rent <= 0) {
     return {
       exitCode: 2,
       stdout: json ? `${JSON.stringify({ expected: maxWaste, actual: null, operator: '<=', passed: false })}\n` : '',
@@ -293,6 +306,7 @@ async function parseFiles(
       continue;
     }
     const parsed = parseSession(text, basename(file, '.jsonl'));
+    if (parsed.records === 0) continue;
     records += parsed.records;
     sessions.push(parsed.session);
   }
@@ -318,9 +332,10 @@ async function loadFromRoots(
   const files: string[] = [];
   for (const root of roots) files.push(...(await walkSessions(root, deps)));
 
-  if (files.length === 0) return { ok: false, error: 'ctxrent: no sessions found' };
+  const kept = await filterSince(files, deps, since);
+  if (kept.length === 0) return { ok: false, error: 'ctxrent: no sessions found' };
 
-  const { sessions, records } = await parseFiles(files, deps);
+  const { sessions, records } = await parseFiles(kept, deps);
   if (records === 0) return { ok: false, error: 'ctxrent: no readable sessions' };
 
   return { ok: true, model: summariseSessions(sessions) };
@@ -590,6 +605,8 @@ async function openReview(
         configuration: teachings.filter((item) => item.lever === 'configuration'),
       }),
     onApply: async (ids, keep, requestedTarget) => {
+      // The page may only write the file named on the command line; anything else is a forged form.
+      if (requestedTarget !== destination) throw new Error(`the target must be ${destination}`);
       let current: string | null = null;
       try {
         current = await deps.readText(requestedTarget);
@@ -1025,6 +1042,8 @@ async function walkSessions(root: string, deps: Deps): Promise<string[]> {
     }
 
     for (const entry of entries.sort()) {
+      // Claude Code keeps a session's subagent transcripts beside it; they are not sessions.
+      if (entry === 'subagents') continue;
       await visit(join(path, entry), depth + 1);
     }
   };
@@ -1048,6 +1067,11 @@ async function latestSessionFile(deps: Deps): Promise<string | null> {
   }
 
   return best;
+}
+
+/** `check` exits 1 only for a verdict over the threshold; everything that is not a verdict is 2. */
+function unmeasurable(message: string): Result {
+  return { ...failure(message), exitCode: 2 };
 }
 
 function failure(message: string): Result {

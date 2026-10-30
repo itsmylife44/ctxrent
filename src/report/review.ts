@@ -78,7 +78,7 @@ ${fresh
 
 <div class="target">
 <label for="target">Instruction file your agent reads in every project</label>
-<input type="text" id="target" name="target" value="${escape(target)}" required>
+<input type="text" id="target" name="target" value="${escape(target)}" readonly>
 </div>
 </form>
 
