@@ -17,7 +17,7 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
-      - run: npm ci
+      - run: npm ci --include=dev
 
       - name: the tag matches package.json
         run: |
