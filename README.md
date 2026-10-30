@@ -62,9 +62,9 @@ what to change
      e.g. Read src/x.ts
 
 top carriers
-  Grep x                              2,400 rent     600 tok        t4–4
-  Bash ls                             2,100 rent     800 tok     t5–6 ×2
-  user                                  700 rent     100 tok        t1–1
+  Grep x                             2,400 rent     600 tok        t4–4
+  Bash ls                            2,100 rent     800 tok     t5–6 ×2
+  user                                 700 rent     100 tok        t1–1
 
 waste 2,600 token-turns (44% of rent)
   superseded-read          500   1 claim(s)
