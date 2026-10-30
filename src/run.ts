@@ -10,7 +10,14 @@ import { renderHtml } from './report/html.ts';
 import { renderDiff } from './report/diff.ts';
 import { parseTaskSet, templateTaskSet } from './taskset.ts';
 import { diffTaskSet } from './diff.ts';
-import { instructionBlock, mergeBlock, teach } from './teach.ts';
+import {
+  composeBlock,
+  instructionBlock,
+  mergeBlock,
+  mergeRules,
+  readManagedRules,
+  teach,
+} from './teach.ts';
 import type { TeachPlan } from './report/teach.ts';
 import { renderTeach } from './report/teach.ts';
 import { renderApplied, renderReview } from './report/review.ts';
@@ -337,7 +344,7 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
 
   const model = summariseSessions(sessions);
   const teachings = teach(sessions, { minSessions });
-  const block = instructionBlock(teachings, sessions.length);
+  let block = instructionBlock(teachings, sessions.length);
 
   let plan: TeachPlan | null = null;
   if (write !== null) {
@@ -347,6 +354,14 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
     } catch {
       existing = null;
     }
+
+    // An update composes with what is already there: dropping a rule the user approved earlier
+    // because it fell below today's threshold would be a silent loss.
+    const proposed = teachings
+      .filter((item) => item.lever === 'instruction')
+      .map((item) => item.advice);
+    block = composeBlock(mergeRules(readManagedRules(existing), proposed), sessions.length);
+
     plan = { path: write, state: stateOf(existing), content: mergeBlock(existing, block) };
   }
 
@@ -410,20 +425,40 @@ async function openReview(
     };
   }
 
+  let before: string | null = null;
+  try {
+    before = await deps.readText(destination);
+  } catch {
+    before = null;
+  }
+
   const state: { applied: { target: string; rules: number } | null } = { applied: null };
 
   const server = await startReview({
-    renderPage: (token) => renderReview({ token, model, teachings, target: destination }),
-    onApply: async (rules, requestedTarget) => {
-      const block = instructionBlock(teachings, sessions.length, rules);
-      let existing: string | null = null;
+    renderPage: (token) =>
+      renderReview({
+        token,
+        model,
+        teachings,
+        target: destination,
+        existingRules: readManagedRules(before),
+      }),
+    onApply: async (rules, keep, requestedTarget) => {
+      let current: string | null = null;
       try {
-        existing = await deps.readText(requestedTarget);
+        current = await deps.readText(requestedTarget);
       } catch {
-        existing = null;
+        current = null;
       }
-      await deps.writeArtifact(requestedTarget, mergeBlock(existing, block));
-      state.applied = { target: requestedTarget, rules: rules.length };
+
+      const selected = teachings
+        .filter((item) => item.lever === 'instruction' && rules.includes(item.id))
+        .map((item) => item.advice);
+
+      // What was already in the file stays, unless the user unticked it in the page.
+      const block = composeBlock(mergeRules(keep, selected), sessions.length);
+      await deps.writeArtifact(requestedTarget, mergeBlock(current, block));
+      state.applied = { target: requestedTarget, rules: selected.length };
       return renderApplied({ rules, target: requestedTarget, block });
     },
   });

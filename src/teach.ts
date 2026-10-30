@@ -67,14 +67,7 @@ export function teach(sessions: SessionSummary[], options: TeachOptions): Teachi
     .sort((a, b) => b.saving - a.saving);
 }
 
-export function instructionBlock(
-  teachings: Teaching[],
-  sessionCount: number,
-  selected?: string[],
-): string {
-  const rules = teachings.filter(
-    (item) => item.lever === 'instruction' && (selected === undefined || selected.includes(item.id)),
-  );
+export function composeBlock(advices: string[], sessionCount: number): string {
   const lines = [
     '<!-- ctxrent:begin -->',
     '## Context hygiene',
@@ -84,12 +77,55 @@ export function instructionBlock(
     '',
   ];
 
-  for (const rule of rules) {
-    lines.push(`- ${rule.advice}`);
-  }
-
+  for (const advice of advices) lines.push(`- ${advice}`);
   lines.push('<!-- ctxrent:end -->');
   return lines.join('\n');
+}
+
+export function instructionBlock(
+  teachings: Teaching[],
+  sessionCount: number,
+  selected?: string[],
+): string {
+  return composeBlock(
+    teachings
+      .filter(
+        (item) =>
+          item.lever === 'instruction' && (selected === undefined || selected.includes(item.id)),
+      )
+      .map((item) => item.advice),
+    sessionCount,
+  );
+}
+
+/** The rules already written between the markers, so an update never erases what is there. */
+export function readManagedRules(existing: string | null): string[] {
+  if (existing === null) return [];
+
+  const begin = existing.indexOf('<!-- ctxrent:begin -->');
+  const end = existing.indexOf('<!-- ctxrent:end -->');
+  if (begin < 0 || end <= begin) return [];
+
+  return existing
+    .slice(begin, end)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.slice(2).trim())
+    .filter((line) => line.length > 0);
+}
+
+export function mergeRules(existing: string[], proposed: string[]): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const advice of [...existing, ...proposed]) {
+    if (seen.has(advice)) continue;
+    seen.add(advice);
+    merged.push(advice);
+  }
+
+  return merged;
 }
 
 /**

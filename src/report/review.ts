@@ -9,10 +9,11 @@ export type ReviewPage = {
   model: AuditModel;
   teachings: Teaching[];
   target: string;
+  existingRules: string[];
 };
 
 export function renderReview(input: ReviewPage): string {
-  const { model, teachings, target, token } = input;
+  const { model, teachings, target, token, existingRules } = input;
   const instructions = teachings.filter((item) => item.lever === 'instruction');
   const configured = teachings.filter((item) => item.lever === 'configuration');
   const top = model.sessions
@@ -36,7 +37,25 @@ export function renderReview(input: ReviewPage): string {
 <p>${problemSentence(top, rent, model.totals.wasteRent)}</p>
 
 <form id="rules" method="post" action="/${escape(token)}/apply">
-<h2>Rules to write</h2>
+<h2>Already in this file</h2>
+${
+  existingRules.length === 0
+    ? '<p class="note">Nothing yet: the managed block is empty.</p>'
+    : `<p class="note">Untick a rule to remove it. Nothing is dropped unless you say so.</p>
+<div class="rules">
+${existingRules
+  .map(
+    (advice) => `<label class="rule">
+  <input type="checkbox" name="keep" value="${escape(advice)}" checked>
+  <span><span class="rule-title">${escape(advice)}</span></span>
+  <span></span>
+</label>`,
+  )
+  .join('\n')}
+</div>`
+}
+
+<h2>New rules from this run</h2>
 <p class="note">Each rule recurs across your sessions. Untick anything you do not want.</p>
 <div class="rules">
 ${instructions.map((item) => rule(item)).join('\n')}

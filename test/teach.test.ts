@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from '../src/run.ts';
 import { nodeDeps } from '../src/deps.ts';
-import { instructionBlock, mergeBlock, teach } from '../src/teach.ts';
+import { instructionBlock, mergeBlock, readManagedRules, teach } from '../src/teach.ts';
 
 async function sessions() {
   const result = await run(['audit', 'test/fixtures/claude-code', '--all', '--json'], nodeDeps);
@@ -179,4 +179,27 @@ test('teach --write applies the block once and updates it in place', async () =>
 
   assert.equal(harness.stored.get('AGENTS.md'), afterFirst);
   assert.equal(afterFirst.match(/ctxrent:begin/g)?.length, 1);
+});
+
+test('readManagedRules reads what is already in the block', () => {
+  const existing = `# Mine\n\n<!-- ctxrent:begin -->\n## Context hygiene\n\n- First rule.\n- Second rule.\n<!-- ctxrent:end -->\n\ntail\n`;
+
+  assert.deepEqual(readManagedRules(existing), ['First rule.', 'Second rule.']);
+  assert.deepEqual(readManagedRules(null), []);
+  assert.deepEqual(readManagedRules('# no block here'), []);
+});
+
+test('an update keeps a rule that today does not recur', async () => {
+  const harness = writingDeps({ interactive: true, answer: true });
+  harness.stored.set(
+    'AGENTS.md',
+    '<!-- ctxrent:begin -->\n## Context hygiene\n\n- Keep this custom rule.\n<!-- ctxrent:end -->\n',
+  );
+
+  await run(teachArgs, harness.deps);
+  const written = harness.stored.get('AGENTS.md') ?? '';
+
+  assert.match(written, /Keep this custom rule\./);
+  assert.match(written, /Read files with the Read tool/);
+  assert.equal(written.match(/ctxrent:begin/g)?.length, 1);
 });

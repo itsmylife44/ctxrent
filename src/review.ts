@@ -14,7 +14,7 @@ export type ReviewServer = {
 
 export type ReviewInput = {
   renderPage(token: string): string;
-  onApply(rules: string[], target: string): Promise<string>;
+  onApply(rules: string[], keep: string[], target: string): Promise<string>;
 };
 
 function readBody(request: IncomingMessage): Promise<string> {
@@ -32,9 +32,13 @@ function readBody(request: IncomingMessage): Promise<string> {
   });
 }
 
-function parseForm(body: string): { rules: string[]; target: string } {
+function parseForm(body: string): { rules: string[]; keep: string[]; target: string } {
   const params = new URLSearchParams(body);
-  return { rules: params.getAll('rule'), target: params.get('target') ?? '' };
+  return {
+    rules: params.getAll('rule'),
+    keep: params.getAll('keep'),
+    target: params.get('target') ?? '',
+  };
 }
 
 /**
@@ -109,14 +113,14 @@ async function handle(
       return;
     }
 
-    const { rules, target } = parseForm(body);
+    const { rules, keep, target } = parseForm(body);
     if (target.trim() === '') {
       response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
       response.end('a target file is required\n');
       return;
     }
 
-    const page = await input.onApply(rules, target);
+    const page = await input.onApply(rules, keep, target);
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.end(page);
     scheduleClose();
