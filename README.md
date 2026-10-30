@@ -301,7 +301,7 @@ npm version patch        # or minor, or major: writes package.json and creates v
 git push --follow-tags
 ```
 
-`npm version` also points the skill at the release the new tag creates (`scripts/version.js`), and a test fails if the two ever disagree: the skill runs the CLI from that release, so a stale URL would ship an old CLI to every `/ctxrent`.
+`npm version` also points the skill at the release the new tag creates (`scripts/version.js`), and a test fails if the two ever disagree: the skill runs the CLI from that release, so a stale URL would ship an old CLI to every `/ctxrent`. Never publish a version number twice: `npx` keeps what it installed from a URL, so a machine that ran the old tarball keeps running it.
 
 The tag must match `package.json`, or the workflow stops before publishing. The publish job runs the tests, builds, and creates a GitHub release with the packed tarball attached — the file the skill runs. It then publishes to npm with provenance, if an `NPM_TOKEN` repository secret is set; without it, the release is the only channel.
 
