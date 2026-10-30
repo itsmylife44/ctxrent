@@ -184,7 +184,10 @@ test('teach --write applies the block once and updates it in place', async () =>
 test('readManagedRules reads what is already in the block', () => {
   const existing = `# Mine\n\n<!-- ctxrent:begin -->\n## Context hygiene\n\n- First rule.\n- Second rule.\n<!-- ctxrent:end -->\n\ntail\n`;
 
-  assert.deepEqual(readManagedRules(existing), ['First rule.', 'Second rule.']);
+  assert.deepEqual(readManagedRules(existing), [
+    { id: null, advice: 'First rule.' },
+    { id: null, advice: 'Second rule.' },
+  ]);
   assert.deepEqual(readManagedRules(null), []);
   assert.deepEqual(readManagedRules('# no block here'), []);
 });
@@ -202,4 +205,20 @@ test('an update keeps a rule that today does not recur', async () => {
   assert.match(written, /Keep this custom rule\./);
   assert.match(written, /Read files with the Read tool/);
   assert.equal(written.match(/ctxrent:begin/g)?.length, 1);
+});
+
+
+test('a rule the user rewrote keeps their wording instead of being duplicated', async () => {
+  const harness = writingDeps({ interactive: true, answer: true });
+  harness.stored.set(
+    'AGENTS.md',
+    '<!-- ctxrent:begin -->\n## Context hygiene\n\n- Leggi i file con Read, non con cat. <!-- id: read-via-read-tool -->\n<!-- ctxrent:end -->\n',
+  );
+
+  await run(teachArgs, harness.deps);
+  const written = harness.stored.get('AGENTS.md') ?? '';
+
+  assert.match(written, /Leggi i file con Read, non con cat\./);
+  assert.doesNotMatch(written, /Read files with the Read tool/);
+  assert.equal(written.match(/id: read-via-read-tool/g)?.length, 1);
 });

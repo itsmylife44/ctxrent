@@ -1,5 +1,5 @@
 import type { AuditModel } from '../model.ts';
-import type { Teaching } from '../teach.ts';
+import type { ManagedRule, Teaching } from '../teach.ts';
 import { escapeHtml as escape, page as document, short } from './theme.ts';
 
 const numbers = new Intl.NumberFormat('en-US');
@@ -9,12 +9,12 @@ export type ReviewPage = {
   model: AuditModel;
   teachings: Teaching[];
   target: string;
-  existingRules: string[];
+  existingRules: ManagedRule[];
 };
 
 export function renderReview(input: ReviewPage): string {
   const { model, teachings, target, token, existingRules } = input;
-  const alreadyThere = new Set(existingRules);
+  const alreadyThere = new Set(existingRules.map((rule) => rule.advice));
   const instructions = teachings.filter(
     (item) => item.lever === 'instruction' && !alreadyThere.has(item.advice),
   );
@@ -48,7 +48,7 @@ ${
 <div class="rules">
 ${existingRules
   .map(
-    (advice) => `<label class="rule">
+    ({ advice }) => `<label class="rule">
   <input type="checkbox" name="keep" value="${escape(advice)}" checked>
   <span><span class="rule-title">${escape(advice)}</span></span>
   <span></span>

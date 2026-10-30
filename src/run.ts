@@ -360,7 +360,7 @@ async function runTeach(args: string[], deps: Deps): Promise<Result> {
     // because it fell below today's threshold would be a silent loss.
     const proposed = teachings
       .filter((item) => item.lever === 'instruction')
-      .map((item) => item.advice);
+      .map((item) => ({ id: item.id, advice: item.advice }));
     block = composeBlock(mergeRules(readManagedRules(existing), proposed), sessions.length);
 
     plan = { path: write, state: stateOf(existing), content: mergeBlock(existing, block) };
@@ -454,10 +454,11 @@ async function openReview(
 
       const selected = teachings
         .filter((item) => item.lever === 'instruction' && rules.includes(item.id))
-        .map((item) => item.advice);
+        .map((item) => ({ id: item.id, advice: item.advice }));
 
-      // What was already in the file stays, unless the user unticked it in the page.
-      const block = composeBlock(mergeRules(keep, selected), sessions.length);
+      // What was already in the file stays, with whatever wording it has, unless unticked.
+      const existing = readManagedRules(current).filter((rule) => keep.includes(rule.advice));
+      const block = composeBlock(mergeRules(existing, selected), sessions.length);
       await deps.writeArtifact(requestedTarget, mergeBlock(current, block));
       state.applied = { target: requestedTarget, rules: selected.length };
       return renderApplied({ rules, target: requestedTarget, block });

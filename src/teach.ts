@@ -67,7 +67,11 @@ export function teach(sessions: SessionSummary[], options: TeachOptions): Teachi
     .sort((a, b) => b.saving - a.saving);
 }
 
-export function composeBlock(advices: string[], sessionCount: number): string {
+export type ManagedRule = { id: string | null; advice: string };
+
+const ID_MARKER = /\s*<!--\s*id:\s*([A-Za-z0-9_-]+)\s*-->\s*$/;
+
+export function composeBlock(rules: ManagedRule[], sessionCount: number): string {
   const lines = [
     '<!-- ctxrent:begin -->',
     '## Context hygiene',
@@ -77,7 +81,9 @@ export function composeBlock(advices: string[], sessionCount: number): string {
     '',
   ];
 
-  for (const advice of advices) lines.push(`- ${advice}`);
+  for (const rule of rules) {
+    lines.push(rule.id === null ? `- ${rule.advice}` : `- ${rule.advice} <!-- id: ${rule.id} -->`);
+  }
   lines.push('<!-- ctxrent:end -->');
   return lines.join('\n');
 }
@@ -93,36 +99,52 @@ export function instructionBlock(
         (item) =>
           item.lever === 'instruction' && (selected === undefined || selected.includes(item.id)),
       )
-      .map((item) => item.advice),
+      .map((item) => ({ id: item.id, advice: item.advice })),
     sessionCount,
   );
 }
 
 /** The rules already written between the markers, so an update never erases what is there. */
-export function readManagedRules(existing: string | null): string[] {
+export function readManagedRules(existing: string | null): ManagedRule[] {
   if (existing === null) return [];
 
   const begin = existing.indexOf('<!-- ctxrent:begin -->');
   const end = existing.indexOf('<!-- ctxrent:end -->');
   if (begin < 0 || end <= begin) return [];
 
-  return existing
-    .slice(begin, end)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('- '))
-    .map((line) => line.slice(2).trim())
-    .filter((line) => line.length > 0);
+  const rules: ManagedRule[] = [];
+
+  for (const line of existing.slice(begin, end).split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('- ')) continue;
+
+    const body = trimmed.slice(2).trim();
+    if (body === '') continue;
+
+    const marker = ID_MARKER.exec(body);
+    rules.push(
+      marker === null
+        ? { id: null, advice: body }
+        : { id: marker[1] ?? null, advice: body.replace(ID_MARKER, '').trim() },
+    );
+  }
+
+  return rules;
 }
 
-export function mergeRules(existing: string[], proposed: string[]): string[] {
-  const seen = new Set<string>();
-  const merged: string[] = [];
+/**
+ * Matching is by rule id, so a rule the user rewrote keeps their wording instead of being
+ * duplicated beside the canonical sentence.
+ */
+export function mergeRules(existing: ManagedRule[], proposed: ManagedRule[]): ManagedRule[] {
+  const key = (rule: ManagedRule): string => rule.id ?? `text:${rule.advice}`;
+  const seen = new Set(existing.map(key));
+  const merged = [...existing];
 
-  for (const advice of [...existing, ...proposed]) {
-    if (seen.has(advice)) continue;
-    seen.add(advice);
-    merged.push(advice);
+  for (const rule of proposed) {
+    if (seen.has(key(rule))) continue;
+    seen.add(key(rule));
+    merged.push(rule);
   }
 
   return merged;

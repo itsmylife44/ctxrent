@@ -142,7 +142,7 @@ test('the page lists what is already in the file, unticked means removed', async
     token: 'tok',
     model,
     target: '/tmp/CLAUDE.md',
-    existingRules: ['Keep this custom rule.'],
+    existingRules: [{ id: null, advice: 'Keep this custom rule.' }],
     teachings: [],
   });
 
@@ -187,7 +187,10 @@ test('a rule already in the file is not proposed again', async () => {
     model,
     target: '/tmp/CLAUDE.md',
     existingRules: [
-      'Read files with the Read tool (offset/limit), never by piping them through Bash.',
+      {
+        id: 'read-via-read-tool',
+        advice: 'Read files with the Read tool (offset/limit), never by piping them through Bash.',
+      },
     ],
     teachings: [
       {

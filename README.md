@@ -128,7 +128,9 @@ ctxrent teach --write ~/.claude/CLAUDE.md      # prints the target, the change, 
 
 Without a terminal to answer, or if you say no, nothing happens and it exits non-zero, so a pipeline cannot mistake a refusal for success. `--yes` is the explicit statement that you chose — it exists for scripted use only.
 
-The block is delimited by `<!-- ctxrent:begin -->` and `<!-- ctxrent:end -->`, so re-running replaces only its own block and leaves your own text alone. Within the block, an update **composes** with what is there: a rule you approved earlier stays even if it no longer recurs today, and the review page shows the current rules first, so removing one is a deliberate untick rather than an accident. To undo everything, delete what is between the markers.
+The block is delimited by `<!-- ctxrent:begin -->` and `<!-- ctxrent:end -->`, so re-running replaces only its own block and leaves your own text alone. Each rule line ends with an invisible `<!-- id: … -->` marker. That is how the tool recognises a rule you rewrote and leaves your wording alone instead of appending the original beside it; the marker is a comment, so it changes nothing in rendered Markdown and costs the agent a few tokens.
+
+Within the block, an update **composes** with what is there: a rule you approved earlier stays even if it no longer recurs today, and the review page shows the current rules first, so removing one is a deliberate untick rather than an accident. To undo everything, delete what is between the markers.
 
 ### Or decide in the browser
 
