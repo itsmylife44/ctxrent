@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import type { AuditModel, SessionSummary } from './model.ts';
 import { summariseSessions } from './model.ts';
@@ -60,11 +61,13 @@ export async function run(argv: string[], deps: Deps): Promise<Result> {
 const USAGE = `ctxrent measures the context rent of coding-agent sessions.
 
 Usage
-  ctxrent                        audit the session you just finished
+  ctxrent                        the session you just finished, and in a terminal
+                                 also its visual report, opened
   ctxrent audit <path>           a session file, or a directory of sessions
       --all                      walk the path recursively
       --json                     print the model instead of the report
-      --html <file>              write a single-file report, and open it
+      --html [file]              write a single-file report and open it;
+                                 without a file, a temporary one is used
       --no-open                  write the report without opening it
   ctxrent check [path]           exit 0 under the threshold, 1 over, 2 cannot measure
       --max-waste <pct>          threshold, default 40
@@ -107,7 +110,25 @@ async function dispatch(argv: string[], deps: Deps): Promise<Result> {
 async function runLatest(deps: Deps): Promise<Result> {
   const file = await latestSessionFile(deps);
   if (file === null) return failure('ctxrent: no sessions found');
-  return runAudit([file], deps);
+
+  const result = await runAudit([file], deps);
+  if (!deps.interactive || result.exitCode !== 0) return result;
+
+  // The visual report is the readable artifact; where a person is waiting, make it and show it
+  // without asking for a filename.
+  const loaded = await loadSessions(file, deps, false);
+  if (!loaded.ok) return result;
+
+  const path = defaultReportPath(basename(file, '.jsonl'));
+  await deps.writeArtifact(path, renderHtml(loaded.model));
+  await deps.openUrl(path);
+
+  return { ...result, stdout: `${result.stdout}\nvisual report ${path} (opened)\n` };
+}
+
+function defaultReportPath(label: string): string {
+  const safe = label.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 40) || 'report';
+  return join(tmpdir(), `ctxrent-${safe}.html`);
 }
 
 async function runAudit(args: string[], deps: Deps): Promise<Result> {
@@ -124,16 +145,18 @@ async function runAudit(args: string[], deps: Deps): Promise<Result> {
     return { exitCode: 0, stdout: `${JSON.stringify(loaded.model, null, 2)}\n`, stderr: '' };
   }
   if (html !== null) {
-    await deps.writeArtifact(html, renderHtml(loaded.model));
+    const path =
+      html === '' ? defaultReportPath(loaded.model.sessions[0]?.sessionId ?? 'report') : html;
+    await deps.writeArtifact(path, renderHtml(loaded.model));
 
     // A report exists to be looked at, but opening a browser is only right where a person is
     // waiting: in a pipe or a CI job the path is the useful output.
     const shouldOpen = open && deps.interactive;
-    if (shouldOpen) await deps.openUrl(resolve(html));
+    if (shouldOpen) await deps.openUrl(resolve(path));
 
     return {
       exitCode: 0,
-      stdout: `wrote ${html}${shouldOpen ? ' and opened it' : ''}\n`,
+      stdout: `wrote ${path}${shouldOpen ? ' and opened it' : ''}\n`,
       stderr: '',
     };
   }
@@ -630,7 +653,10 @@ function parseAuditArgs(
     }
     if (argument === '--html') {
       const value = args[index + 1];
-      if (value === undefined) return { ok: false, error: 'ctxrent: --html needs a file path' };
+      if (value === undefined || value.startsWith('-')) {
+        options.html = '';
+        continue;
+      }
       options.html = value;
       index += 1;
       continue;

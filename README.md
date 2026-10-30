@@ -19,7 +19,7 @@ That single equation explains why an early mistake costs many times a late one, 
 ```bash
 git clone https://github.com/<you>/ctxrent
 cd ctxrent
-./src/cli.ts              # audits the session you just finished
+./src/cli.ts              # the session you just finished, plus its visual report
 ```
 
 To run it from the clone you need nothing but Node 22.18 or newer: the TypeScript source runs directly.
@@ -72,7 +72,15 @@ waste 2,600 token-turns (44% of rent)
   retry-loop               300   1 claim(s)
 ```
 
-`--html report.html` writes the same thing as one self-contained file — light and dark, no external references, no scripting — and opens it in your browser when a terminal is attached. In a pipe or a CI job it writes the file and prints the path instead, because opening a browser there would be wrong; `--no-open` forces that behaviour everywhere.
+In a terminal, `ctxrent` on its own also writes the visual report to a temporary file and opens it. `--html` does the same with a path you choose, or with no path at all:
+
+```bash
+ctxrent --html                  # a temporary file, opened
+ctxrent --html report.html      # a file you keep, opened
+ctxrent --html --no-open        # just write it
+```
+
+The report is one self-contained file — light and dark, no external references, no scripting — and opens it in your browser when a terminal is attached. In a pipe or a CI job it writes the file and prints the path instead, because opening a browser there would be wrong; `--no-open` forces that behaviour everywhere.
 
 ## What it finds
 

@@ -90,3 +90,44 @@ test('check --all with no path gates the whole archive, not the latest session',
   assert.equal(reads, 2);
   assert.equal(result.exitCode, 2);
 });
+
+test('with no arguments a terminal also gets the visual report, opened', async () => {
+  const written: string[] = [];
+  const opened: string[] = [];
+  const base = fakeDeps(['new.jsonl']);
+  const deps = {
+    ...base,
+    interactive: true,
+    async writeArtifact(path: string) {
+      written.push(path);
+    },
+    async openUrl(url: string) {
+      opened.push(url);
+    },
+  };
+
+  const result = await run([], deps);
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /session new/);
+  assert.match(result.stdout, /visual report .*ctxrent-new\.html \(opened\)/);
+  assert.equal(written.length, 1);
+  assert.equal(opened.length, 1);
+});
+
+test('with no arguments and no terminal, no file is written', async () => {
+  const written: string[] = [];
+  const base = fakeDeps(['new.jsonl']);
+  const deps = {
+    ...base,
+    interactive: false,
+    async writeArtifact(path: string) {
+      written.push(path);
+    },
+  };
+
+  const result = await run([], deps);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(written.length, 0);
+});

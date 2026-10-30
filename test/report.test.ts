@@ -155,3 +155,20 @@ test('--no-open writes the report without opening a browser', async () => {
   assert.equal(opened.length, 0);
   assert.equal(result.stdout.trim(), 'wrote report.html');
 });
+
+test('--html without a filename picks a temporary path', async () => {
+  const writes: string[] = [];
+  const deps = {
+    ...nodeDeps,
+    async writeArtifact(path: string) {
+      writes.push(path);
+    },
+  };
+
+  const result = await run(['audit', waste, '--html'], deps);
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(writes.length, 1);
+  assert.match(writes[0] ?? '', /ctxrent-fixture-waste\.html$/);
+  assert.match(result.stdout, /wrote .*ctxrent-fixture-waste\.html/);
+});
