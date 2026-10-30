@@ -36,5 +36,13 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itsmylife44/ctxrent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/itsmylife44/ctxrent/issues"
+  },
+  "homepage": "https://github.com/itsmylife44/ctxrent#readme"
 }

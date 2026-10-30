@@ -17,7 +17,7 @@ That single equation explains why an early mistake costs many times a late one, 
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/ctxrent
+git clone https://github.com/itsmylife44/ctxrent
 cd ctxrent
 ./src/cli.ts              # the session you just finished, then the page you apply from
 ```
@@ -129,7 +129,7 @@ A pattern that comes from always-on context — an attachment re-injected every 
 The skill teaches your agent the protocol; the CLI is called by the agent, never the other way round.
 
 ```bash
-npx skills add <owner>/ctxrent --agent claude-code -g   # installs to ~/.claude/skills/ctxrent
+npx skills add itsmylife44/ctxrent --agent claude-code -g   # installs to ~/.claude/skills/ctxrent
 ```
 
 From a local clone, `npx skills add . --agent claude-code -g`. The skill follows the [Agent Skills](https://agentskills.io) specification, so the same install works for Codex, Cursor, Gemini CLI and the rest of the agents `skills` supports; `ctxrent skill` prints the file if you would rather place it yourself.
@@ -293,7 +293,7 @@ The tag must match `package.json`, or the workflow stops before publishing. The 
 On the same tag, the workflow also creates a GitHub release with the packed tarball attached, so the CLI can be installed straight from GitHub:
 
 ```bash
-npm i -g https://github.com/<owner>/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz
+npm i -g https://github.com/itsmylife44/ctxrent/releases/download/v0.1.0/ctxrent-0.1.0.tgz
 # or, with no npm at all: extract the asset and run
 node package/dist/cli.js
 ```

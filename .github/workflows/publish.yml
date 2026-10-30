@@ -43,15 +43,32 @@ jobs:
 
       - run: npm test
       - run: npm run typecheck
-      - run: npm publish --provenance --access public
+      - run: npm pack
+
+      # The GitHub release comes before npm on purpose: it is what makes the CLI
+      # installable from the repository, and it must not depend on npm credentials.
+      - name: attach the tarball to a release
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" ctxrent-*.tgz --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: is an npm token configured?
+        id: npm
+        run: |
+          if [ -n "${NODE_AUTH_TOKEN}" ]; then
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::NPM_TOKEN is not set, so the package is not published to npm."
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: attach the tarball to a release
-        run: |
-          npm pack
-          gh release create "$GITHUB_REF_NAME" ctxrent-*.tgz \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+      - name: publish to npm
+        if: steps.npm.outputs.set == 'true'
+        run: npm publish --provenance --access public
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
