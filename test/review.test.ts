@@ -234,15 +234,70 @@ test('review --rules refuses a file with no usable rule', async () => {
   assert.match(result.stderr, /no usable rule/);
 });
 
-test('a proposed rule whose finding is already in the file is not offered as new', () => {
+test('a new wording for a rule already in the file is offered as a rewrite, unticked', () => {
   const page = renderReview({
     token: 'tok',
     model: { sessions: [], totals: { turns: 0 } } as never,
     target: '/tmp/CLAUDE.md',
-    existingRules: [{ id: 'read-via-read-tool', advice: 'Old wording.' }],
-    rules: [{ id: 'read-via-read-tool', advice: 'New wording.' }],
+    existingRules: [
+      { id: 'read-via-read-tool', advice: 'Old wording.' },
+      { id: 'list-heavy', advice: 'Same wording.' },
+    ],
+    rules: [
+      { id: 'read-via-read-tool', advice: 'New wording.' },
+      { id: 'list-heavy', advice: 'Same wording.' },
+    ],
     configuration: [],
   });
 
-  assert.ok(!page.includes('New wording.'));
+  assert.match(page, /Rewrites of rules already here/);
+  assert.match(page, /<input type="checkbox" name="rule" value="read-via-read-tool">/);
+  assert.match(page, /replaces: Old wording\./);
+  assert.doesNotMatch(page, /value="list-heavy"/, 'an identical rule is not offered at all');
+});
+
+async function rewrite(tick: boolean): Promise<string> {
+  const harness = reviewDeps(async (url) => {
+    const form = new URLSearchParams();
+    form.append('keep', 'Old wording.');
+    if (tick) form.append('rule', 'read-via-read-tool');
+    form.append('target', 'OUT.md');
+    await fetch(`${url}/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+  });
+  harness.stored.set(
+    'OUT.md',
+    '<!-- ctxrent:begin -->\n- Old wording. <!-- id: read-via-read-tool -->\n<!-- ctxrent:end -->\n',
+  );
+  const deps = {
+    ...harness.deps,
+    async readText(path: string) {
+      if (path === 'rules.md') return '- New wording. <!-- id: read-via-read-tool -->\n';
+      return harness.deps.readText(path);
+    },
+  };
+
+  const result = await run(
+    ['review', 'test/fixtures/claude-code', '--min-sessions', '1', '--rules', 'rules.md', '--write', 'OUT.md'],
+    deps,
+  );
+  assert.equal(result.exitCode, 0);
+  return harness.stored.get('OUT.md') ?? '';
+}
+
+test('a ticked rewrite replaces the rule with the same id', async () => {
+  const written = await rewrite(true);
+
+  assert.match(written, /- New wording\. <!-- id: read-via-read-tool -->/);
+  assert.doesNotMatch(written, /Old wording/);
+});
+
+test('an unticked rewrite leaves the current wording alone', async () => {
+  const written = await rewrite(false);
+
+  assert.match(written, /- Old wording\. <!-- id: read-via-read-tool -->/);
+  assert.doesNotMatch(written, /New wording/);
 });

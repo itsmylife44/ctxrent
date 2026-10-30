@@ -16,9 +16,14 @@ export type ReviewPage = {
 
 export function renderReview(input: ReviewPage): string {
   const { model, target, token, existingRules, rules, configuration } = input;
-  // A finding already in the file keeps the wording there; only findings it lacks are new.
-  const alreadyThere = new Set(existingRules.map((rule) => rule.id ?? rule.advice));
-  const fresh = rules.filter((rule) => !alreadyThere.has(rule.id ?? rule.advice));
+  // A finding the file lacks is new. A finding it already has, worded differently, is a rewrite:
+  // offered unticked, so the current wording stays unless the user picks the new one.
+  const current = new Map(existingRules.map((rule) => [rule.id ?? rule.advice, rule.advice]));
+  const fresh = rules.filter((rule) => !current.has(rule.id ?? rule.advice));
+  const rewrites = rules.flatMap((rule) => {
+    const old = current.get(rule.id ?? rule.advice);
+    return old === undefined || old === rule.advice ? [] : [{ ...rule, replaces: old }];
+  });
 
   const top = model.sessions
     .flatMap((session) => session.carriers)
@@ -70,6 +75,27 @@ ${fresh
     (item) => `<label class="rule">
   <input type="checkbox" name="rule" value="${escape(item.id ?? '')}" checked>
   <span><span class="rule-title">${escape(item.advice)}</span></span>
+  <span></span>
+</label>`,
+  )
+  .join('\n')}
+</div>`
+}
+
+${
+  rewrites.length === 0
+    ? ''
+    : `<h2>Rewrites of rules already here</h2>
+<p class="note">Your agent wrote a new version of a rule this file has. Tick it to replace the current wording.</p>
+<div class="rules">
+${rewrites
+  .map(
+    (item) => `<label class="rule">
+  <input type="checkbox" name="rule" value="${escape(item.id ?? '')}">
+  <span>
+    <span class="rule-title">${escape(item.advice)}</span>
+    <span class="rule-meta">replaces: ${escape(item.replaces)}</span>
+  </span>
   <span></span>
 </label>`,
   )

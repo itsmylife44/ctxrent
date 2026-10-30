@@ -615,7 +615,11 @@ async function openReview(
       }
 
       const selected = rules.filter((item) => item.id !== null && ids.includes(item.id));
-      const existing = readManagedRules(current).filter((rule) => keep.includes(rule.advice));
+      // A ticked rewrite takes the place of the rule with the same id.
+      const replaced = new Set(selected.map((item) => item.id));
+      const existing = readManagedRules(current).filter(
+        (rule) => keep.includes(rule.advice) && !replaced.has(rule.id),
+      );
       const block = composeBlock(mergeRules(existing, selected), sessions.length);
 
       await deps.writeArtifact(requestedTarget, mergeBlock(current, block));

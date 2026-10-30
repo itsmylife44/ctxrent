@@ -65,6 +65,9 @@ in. Decide what it says from `label`, `example` and the numbers. Leave a finding
 not confident about its rule: a missing rule beats a wrong one. Copy ids from the JSON only;
 `ctxrent` drops any line whose id it does not know.
 
+When the target already has a rule for a finding, write a new one only if it should change: the
+page offers it as a rewrite, unticked, and the current wording stays unless the user ticks it.
+
 Done when every `instruction` finding has one line or was left out on purpose, and the file holds
 nothing else.
 

@@ -181,7 +181,7 @@ Without a terminal to answer, or if you say no, nothing happens and it exits non
 
 The block is delimited by `<!-- ctxrent:begin -->` and `<!-- ctxrent:end -->`, so re-running replaces only its own block and leaves your own text alone. Each rule line ends with an invisible `<!-- id: … -->` marker. That is how the tool recognises a rule you rewrote and leaves your wording alone instead of appending the original beside it; the marker is a comment, so it changes nothing in rendered Markdown and costs the agent a few tokens.
 
-Within the block, an update **composes** with what is there: a rule you approved earlier stays even if it no longer recurs today, and the review page shows the current rules first, so removing one is a deliberate untick rather than an accident. To undo everything, delete what is between the markers.
+Within the block, an update **composes** with what is there: a rule you approved earlier stays even if it no longer recurs today, and the review page shows the current rules first, so removing one is a deliberate untick rather than an accident. When your agent rewords a rule the file already has, the page offers the new wording as a rewrite, unticked: the current wording stays unless you tick it. To undo everything, delete what is between the markers.
 
 ### Or decide in the browser
 
